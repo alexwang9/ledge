@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?
+  name      String?
+  createdAt DateTime @default(now())
+
+  plaidItems       PlaidItem[]
+  budgetCategories BudgetCategory[]
+  merchantBudgets  MerchantBudget[]
+}
+
+model PlaidItem {
+  id              String   @id @default(cuid())
+  userId          String
+  accessToken     String
+  institutionId   String
+  institutionName String
+  cursor          String?
+  createdAt       DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Transaction {
+  id                 String   @id @default(cuid())
+  plaidItemId        String
+  plaidTransactionId String   @unique
+  date               DateTime
+  name               String
+  merchantName       String?
+  amount             Float
+  category           String?
+  subcategory        String?
+  categoryOverride   String?  // User-assigned category that takes precedence over auto-mapped
+  pending            Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  plaidItem PlaidItem @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+
+  @@index([plaidItemId])
+  @@index([date])
+  @@index([category])
+}
+
+enum BudgetCategoryType {
+  EXPENSE
+  INCOME
+}
+
+model BudgetCategory {
+  id           String             @id @default(cuid())
+  userId       String
+  name         String
+  type         BudgetCategoryType
+  monthlyLimit Float?
+  createdAt    DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name, type])
+  @@index([userId])
+}
+
+model MerchantBudget {
+  id           String   @id @default(cuid())
+  userId       String
+  merchantName String
+  monthlyLimit Float
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantName])
+  @@index([userId])
+}
