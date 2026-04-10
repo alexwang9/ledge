@@ -101,6 +101,14 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t border-white/[0.06] py-8">
         <div className="container mx-auto px-4 text-center text-white/30 text-sm">
+          <div className="flex justify-center gap-6 mb-4">
+            <Link href="/privacy" className="hover:text-white/60 transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-white/60 transition-colors">
+              Terms of Service
+            </Link>
+          </div>
           Vizio Finance &copy; {new Date().getFullYear()}
         </div>
       </footer>

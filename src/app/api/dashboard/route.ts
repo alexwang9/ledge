@@ -93,7 +93,7 @@ export async function GET() {
       monthlyData[month].income - monthlyData[month].expenses;
   }
 
-  const startingBalance = 5000;
+  const startingBalance = 0;
   const endingBalance = startingBalance + cumulativeNetSavings;
 
   return NextResponse.json({

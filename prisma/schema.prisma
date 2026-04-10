@@ -11,15 +11,32 @@ datasource db {
 }
 
 model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String?
+  name          String?
+  emailVerified Boolean  @default(false)
+  mfaEnabled    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  plaidItems        PlaidItem[]
+  budgetCategories  BudgetCategory[]
+  merchantBudgets   MerchantBudget[]
+  verificationCodes VerificationCode[]
+}
+
+model VerificationCode {
   id        String   @id @default(cuid())
-  email     String   @unique
-  password  String?
-  name      String?
+  userId    String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  plaidItems       PlaidItem[]
-  budgetCategories BudgetCategory[]
-  merchantBudgets  MerchantBudget[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([code])
 }
 
 model PlaidItem {

@@ -4,18 +4,19 @@ import { requireAuth } from '@/lib/auth';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth();
   if ('error' in auth) return auth.error;
 
   try {
+    const { id } = await params;
     const body = await request.json();
     const { category } = body;
 
     // Get the transaction and verify ownership
     const transaction = await prisma.transaction.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { plaidItem: true },
     });
 
@@ -32,7 +33,7 @@ export async function PATCH(
 
     // Update the category override
     const updated = await prisma.transaction.update({
-      where: { id: params.id },
+      where: { id },
       data: { categoryOverride: category },
     });
 

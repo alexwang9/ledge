@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { validateEmail, validatePassword } from '@/lib/validation';
+import { sendVerificationCode, generateVerificationCode } from '@/lib/email';
 
 export async function POST(request: Request) {
   try {
@@ -39,51 +40,65 @@ export async function POST(request: Request) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 400 }
-      );
+      // If user exists but isn't verified, allow re-registration
+      if (!existingUser.emailVerified) {
+        // Delete the unverified user and their verification codes
+        await prisma.verificationCode.deleteMany({
+          where: { userId: existingUser.id },
+        });
+        await prisma.user.delete({
+          where: { id: existingUser.id },
+        });
+      } else {
+        return NextResponse.json(
+          { error: 'An account with this email already exists' },
+          { status: 400 }
+        );
+      }
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user (unverified)
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name,
+        emailVerified: false,
       },
     });
 
-    // Copy default budget categories to the new user
-    const defaultUser = await prisma.user.findUnique({
-      where: { email: 'system@default.local' },
+    // Generate and save verification code
+    const code = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await prisma.verificationCode.create({
+      data: {
+        userId: user.id,
+        code,
+        expiresAt,
+      },
     });
 
-    if (defaultUser) {
-      const defaultCategories = await prisma.budgetCategory.findMany({
-        where: { userId: defaultUser.id },
-      });
+    // Send verification email
+    const emailSent = await sendVerificationCode(user.email, code);
 
-      await prisma.budgetCategory.createMany({
-        data: defaultCategories.map((cat) => ({
-          userId: user.id,
-          name: cat.name,
-          type: cat.type,
-          monthlyLimit: cat.monthlyLimit,
-        })),
-      });
+    if (!emailSent) {
+      // Clean up user if email fails
+      await prisma.user.delete({ where: { id: user.id } });
+      return NextResponse.json(
+        { error: 'Failed to send verification email. Please try again.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
+      requiresVerification: true,
+      email: user.email,
+      message: 'Verification code sent to your email',
     });
   } catch (error) {
     console.error('Registration error:', error);

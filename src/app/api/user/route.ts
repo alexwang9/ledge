@@ -13,6 +13,7 @@ export async function GET() {
         id: true,
         email: true,
         name: true,
+        mfaEnabled: true,
         createdAt: true,
       },
     });
@@ -34,19 +35,30 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name } = body;
+    const { name, mfaEnabled } = body;
 
-    if (typeof name !== 'string') {
-      return NextResponse.json({ error: 'Name must be a string' }, { status: 400 });
+    const updateData: { name?: string | null; mfaEnabled?: boolean } = {};
+
+    if (typeof name === 'string') {
+      updateData.name = name.trim() || null;
+    }
+
+    if (typeof mfaEnabled === 'boolean') {
+      updateData.mfaEnabled = mfaEnabled;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
     const user = await prisma.user.update({
       where: { id: auth.userId },
-      data: { name: name.trim() || null },
+      data: updateData,
       select: {
         id: true,
         email: true,
         name: true,
+        mfaEnabled: true,
         createdAt: true,
       },
     });

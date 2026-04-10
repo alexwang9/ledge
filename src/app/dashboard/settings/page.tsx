@@ -24,6 +24,7 @@ interface UserProfile {
   id: string;
   email: string;
   name: string | null;
+  mfaEnabled: boolean;
   createdAt: string;
 }
 
@@ -64,6 +65,7 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [togglingMfa, setTogglingMfa] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -191,6 +193,37 @@ export default function SettingsPage() {
       });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleToggleMfa = async () => {
+    if (!user) return;
+
+    setTogglingMfa(true);
+    try {
+      const response = await fetch('/api/user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaEnabled: !user.mfaEnabled }),
+      });
+      if (!response.ok) throw new Error('Failed to update MFA setting');
+      const updatedUser = await response.json();
+      setUser(updatedUser);
+      toast({
+        title: updatedUser.mfaEnabled ? 'MFA enabled' : 'MFA disabled',
+        description: updatedUser.mfaEnabled
+          ? 'You will need to verify your email when signing in.'
+          : 'Email verification is no longer required when signing in.',
+      });
+    } catch (error) {
+      console.error('Failed to toggle MFA:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update MFA setting',
+      });
+    } finally {
+      setTogglingMfa(false);
     }
   };
 
@@ -395,6 +428,37 @@ export default function SettingsPage() {
                 </Button>
               </div>
             )}
+
+            {/* MFA Toggle */}
+            <div className="flex items-center justify-between py-4 border-t border-white/[0.06]">
+              <div>
+                <Label className="text-sm text-white/50">Two-Factor Authentication</Label>
+                <p className="text-white/90 mt-1">
+                  {user?.mfaEnabled ? 'Enabled' : 'Disabled'}
+                </p>
+                <p className="text-xs text-white/40 mt-0.5">
+                  {user?.mfaEnabled
+                    ? 'A verification code is sent to your email when you sign in'
+                    : 'Enable to require email verification when signing in'}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                onClick={handleToggleMfa}
+                disabled={togglingMfa}
+                className={user?.mfaEnabled
+                  ? 'text-rose-400 hover:text-rose-300 hover:bg-rose-500/10'
+                  : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'}
+              >
+                {togglingMfa ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : user?.mfaEnabled ? (
+                  'Disable'
+                ) : (
+                  'Enable'
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

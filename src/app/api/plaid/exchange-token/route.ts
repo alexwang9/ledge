@@ -30,16 +30,6 @@ export async function POST(request: Request) {
     const institutionId = metadata?.institution?.institution_id || '';
     const institutionName = metadata?.institution?.name || 'Unknown Institution';
 
-    // Ensure user exists (create if not)
-    await prisma.user.upsert({
-      where: { id: auth.userId },
-      update: {},
-      create: {
-        id: auth.userId,
-        email: `${auth.userId}@placeholder.local`, // placeholder until real auth
-      },
-    });
-
     // Store the PlaidItem
     const plaidItem = await prisma.plaidItem.create({
       data: {
