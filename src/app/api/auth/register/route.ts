@@ -1,17 +1,32 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { sendVerificationCode, generateVerificationCode } from '@/lib/email';
+import { checkRateLimit } from '@/lib/ratelimit';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
+  const { limited } = await checkRateLimit(ip);
+  if (limited) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
-    const { email, password, name } = body;
+    const { email, password, name, consent } = body;
 
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    if (consent !== true) {
+      return NextResponse.json(
+        { error: 'You must agree to the Privacy Policy and Terms of Service' },
         { status: 400 }
       );
     }

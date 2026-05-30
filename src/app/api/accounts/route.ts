@@ -44,6 +44,8 @@ export async function GET() {
             institutionId: item.institutionId,
             institutionName: item.institutionName,
             connectedAt: item.createdAt,
+            needsRelink: item.needsRelink,
+            accessToken: item.accessToken,
             accounts,
             error: null,
           };
@@ -55,6 +57,8 @@ export async function GET() {
             institutionId: item.institutionId,
             institutionName: item.institutionName,
             connectedAt: item.createdAt,
+            needsRelink: item.needsRelink,
+            accessToken: item.accessToken,
             accounts: [],
             error: 'Failed to fetch accounts',
           };

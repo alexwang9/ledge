@@ -16,7 +16,7 @@ export default async function HomePage() {
       <header className="border-b border-white/[0.06]">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-            Vizio
+            Ledge
           </div>
           <div className="flex gap-4">
             <Link
@@ -43,7 +43,7 @@ export default async function HomePage() {
           </h1>
           <p className="text-lg md:text-xl text-white/40 mb-8 max-w-2xl mx-auto">
             Connect your bank accounts, track spending, and build better money
-            habits. Vizio gives you a clear picture of where your money goes.
+            habits. Ledge gives you a clear picture of where your money goes.
           </p>
           <div className="flex gap-4 justify-center flex-col sm:flex-row">
             <Link
@@ -109,7 +109,7 @@ export default async function HomePage() {
               Terms of Service
             </Link>
           </div>
-          Vizio Finance &copy; {new Date().getFullYear()}
+          Ledge &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>

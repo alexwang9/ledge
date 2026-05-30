@@ -1,13 +1,13 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - Vizio',
-  description: 'Privacy Policy for Vizio Finance',
+  title: 'Privacy Policy - Ledge',
+  description: 'Privacy Policy for Ledge',
 };
 
 export default function PrivacyPolicyPage() {
   const lastUpdated = 'February 25, 2026';
-  const contactEmail = 'privacy@vizio.finance'; // TODO: Update with your email
+  const contactEmail = 'privacy@ledgeflux.com';
 
   return (
     <article className="prose prose-invert prose-emerald max-w-none">
@@ -17,7 +17,7 @@ export default function PrivacyPolicyPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Introduction</h2>
         <p className="text-white/70 leading-relaxed">
-          Vizio Finance (&quot;Vizio,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy.
+          Ledge (&quot;Ledge,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy.
           This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our
           personal finance management application and related services (the &quot;Service&quot;).
         </p>

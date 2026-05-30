@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       data: {
         userId: auth.userId,
         accessToken,
+        plaidItemId: itemId,
         institutionId,
         institutionName,
         cursor: null, // Will be set after first sync

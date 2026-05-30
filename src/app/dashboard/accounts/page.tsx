@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Wallet,
   AlertCircle,
+  AlertTriangle,
   Trash2,
   RefreshCw,
 } from 'lucide-react';
@@ -35,6 +36,8 @@ interface Institution {
   institutionId: string;
   institutionName: string;
   connectedAt: string;
+  needsRelink: boolean;
+  accessToken: string;
   accounts: Account[];
   error: string | null;
 }
@@ -323,6 +326,21 @@ export default function AccountsPage() {
                       )}
                     </Button>
                   </div>
+                  {institution.needsRelink && (
+                    <div className="mt-3 flex items-center justify-between gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                        <p className="text-sm text-amber-400">
+                          Reconnection required — your bank credentials have changed.
+                        </p>
+                      </div>
+                      <PlaidLinkButton
+                        accessToken={institution.accessToken}
+                        onSuccess={handlePlaidSuccess}
+                        className="shrink-0 text-xs px-3 py-1.5 h-auto bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30 transition-all rounded-md"
+                      />
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {institution.error ? (

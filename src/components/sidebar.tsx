@@ -38,7 +38,7 @@ export function Sidebar() {
   const sidebarContent = (
     <>
       <div className="p-6 border-b border-white/[0.06]">
-        <h1 className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">Vizio</h1>
+        <h1 className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">Ledge</h1>
         <p className="text-sm text-white/40">Personal Finance</p>
       </div>
 

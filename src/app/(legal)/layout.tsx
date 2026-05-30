@@ -13,7 +13,7 @@ export default function LegalLayout({
             href="/"
             className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent"
           >
-            Vizio
+            Ledge
           </Link>
           <div className="flex gap-4">
             <Link
@@ -44,7 +44,7 @@ export default function LegalLayout({
               Terms of Service
             </Link>
           </div>
-          Vizio Finance &copy; {new Date().getFullYear()}
+          Ledge &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>

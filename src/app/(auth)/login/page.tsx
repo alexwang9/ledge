@@ -144,7 +144,7 @@ export default function LoginPage() {
           </CardTitle>
           <CardDescription className="text-white/40">
             {step === 'credentials'
-              ? 'Sign in to your Vizio account'
+              ? 'Sign in to your Ledge account'
               : `We sent a verification code to ${email}`}
           </CardDescription>
         </CardHeader>

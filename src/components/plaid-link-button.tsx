@@ -7,18 +7,25 @@ import { useToast } from '@/hooks/use-toast';
 
 interface PlaidLinkButtonProps {
   onSuccess: () => void;
+  /** Pass the institution's accessToken to launch Plaid in update mode (re-link). */
+  accessToken?: string;
+  label?: string;
+  className?: string;
 }
 
-export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
+export function PlaidLinkButton({ onSuccess, accessToken, label, className }: PlaidLinkButtonProps) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const isUpdateMode = Boolean(accessToken);
 
   useEffect(() => {
     const fetchLinkToken = async () => {
       try {
         const response = await fetch('/api/plaid/create-link-token', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(accessToken ? { access_token: accessToken } : {}),
         });
         const data = await response.json();
         if (data.link_token) {
@@ -40,30 +47,25 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
     };
 
     fetchLinkToken();
-  }, [toast]);
+  }, [toast, accessToken]);
 
   const handleOnSuccess = useCallback(
     async (publicToken: string, metadata: unknown) => {
       setLoading(true);
-
       try {
-        const exchangeResponse = await fetch('/api/plaid/exchange-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ public_token: publicToken, metadata }),
-        });
-
-        if (!exchangeResponse.ok) {
-          throw new Error('Failed to exchange token');
+        if (!isUpdateMode) {
+          // Normal mode: exchange token then sync
+          const exchangeResponse = await fetch('/api/plaid/exchange-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ public_token: publicToken, metadata }),
+          });
+          if (!exchangeResponse.ok) throw new Error('Failed to exchange token');
         }
 
-        const syncResponse = await fetch('/api/plaid/sync-transactions', {
-          method: 'POST',
-        });
-
-        if (!syncResponse.ok) {
-          throw new Error('Failed to sync transactions');
-        }
+        // Both modes: sync transactions
+        const syncResponse = await fetch('/api/plaid/sync-transactions', { method: 'POST' });
+        if (!syncResponse.ok) throw new Error('Failed to sync transactions');
 
         onSuccess();
       } catch (err) {
@@ -76,7 +78,7 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
         setLoading(false);
       }
     },
-    [onSuccess, toast]
+    [isUpdateMode, onSuccess, toast]
   );
 
   const { open, ready } = usePlaidLink({
@@ -84,13 +86,17 @@ export function PlaidLinkButton({ onSuccess }: PlaidLinkButtonProps) {
     onSuccess: handleOnSuccess,
   });
 
+  const defaultLabel = isUpdateMode ? 'Reconnect' : 'Link Bank Account';
+  const defaultClass =
+    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all';
+
   return (
     <Button
       onClick={() => open()}
       disabled={!ready || loading}
-      className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all"
+      className={className ?? defaultClass}
     >
-      {loading ? 'Linking...' : 'Link Bank Account'}
+      {loading ? (isUpdateMode ? 'Reconnecting...' : 'Linking...') : (label ?? defaultLabel)}
     </Button>
   );
 }

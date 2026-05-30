@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -43,9 +44,12 @@ model PlaidItem {
   id              String   @id @default(cuid())
   userId          String
   accessToken     String
+  plaidItemId     String?  // Plaid's item_id from token exchange, used to match webhooks
   institutionId   String
   institutionName String
   cursor          String?
+  needsRelink     Boolean  @default(false)
+  relinkError     String?
   createdAt       DateTime @default(now())
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

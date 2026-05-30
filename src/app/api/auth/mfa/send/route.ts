@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
-import { sendVerificationCode, generateVerificationCode } from '@/lib/email';
 import { validateEmail } from '@/lib/validation';
+import { checkRateLimit } from '@/lib/ratelimit';
 
 export async function POST(request: NextRequest) {
+  const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
+  const { limited } = await checkRateLimit(ip);
+  if (limited) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { email, password } = body;
@@ -55,49 +62,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if MFA is enabled for this user
-    if (!user.mfaEnabled) {
-      // MFA not enabled, allow direct login
-      return NextResponse.json({
-        mfaRequired: false,
-        email: user.email,
-      });
-    }
-
-    // Delete any existing unused codes for this user
-    await prisma.verificationCode.deleteMany({
-      where: {
-        userId: user.id,
-        used: false,
-      },
-    });
-
-    // Generate and save verification code
-    const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    await prisma.verificationCode.create({
-      data: {
-        userId: user.id,
-        code,
-        expiresAt,
-      },
-    });
-
-    // Send verification email
-    const emailSent = await sendVerificationCode(user.email, code);
-
-    if (!emailSent) {
-      return NextResponse.json(
-        { error: 'Failed to send verification code. Please try again.' },
-        { status: 500 }
-      );
-    }
-
+    // MFA temporarily disabled — go straight to credential sign-in
     return NextResponse.json({
-      mfaRequired: true,
+      mfaRequired: false,
       email: user.email,
-      message: 'Verification code sent to your email',
     });
   } catch (error) {
     console.error('MFA send error:', error);

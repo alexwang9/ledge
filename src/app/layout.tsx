@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Vizio - Personal Finance',
+  title: 'Ledge - Personal Finance',
   description: 'Take control of your finances',
 };
 

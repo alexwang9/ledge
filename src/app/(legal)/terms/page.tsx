@@ -1,13 +1,13 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service - Vizio',
-  description: 'Terms of Service for Vizio Finance',
+  title: 'Terms of Service - Ledge',
+  description: 'Terms of Service for Ledge',
 };
 
 export default function TermsOfServicePage() {
   const lastUpdated = 'February 25, 2026';
-  const contactEmail = 'support@vizio.finance'; // TODO: Update with your email
+  const contactEmail = 'support@ledgeflux.com';
 
   return (
     <article className="prose prose-invert prose-emerald max-w-none">
@@ -17,7 +17,7 @@ export default function TermsOfServicePage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Agreement to Terms</h2>
         <p className="text-white/70 leading-relaxed">
-          By accessing or using Vizio Finance (&quot;Vizio,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) and our personal finance
+          By accessing or using Ledge (&quot;Ledge,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) and our personal finance
           management application (the &quot;Service&quot;), you agree to be bound by these Terms of Service (&quot;Terms&quot;).
           If you do not agree to these Terms, do not use the Service.
         </p>
@@ -26,7 +26,7 @@ export default function TermsOfServicePage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Description of Service</h2>
         <p className="text-white/70 leading-relaxed">
-          Vizio is a personal finance management tool that allows you to:
+          Ledge is a personal finance management tool that allows you to:
         </p>
         <ul className="list-disc list-inside text-white/70 space-y-2 mt-4">
           <li>Connect your bank accounts, credit cards, and other financial accounts</li>
@@ -113,7 +113,7 @@ export default function TermsOfServicePage() {
         <h2 className="text-xl font-semibold mb-4">Intellectual Property</h2>
         <p className="text-white/70 leading-relaxed">
           The Service, including its design, features, and content (excluding your personal data), is owned by
-          Vizio and protected by copyright, trademark, and other intellectual property laws. You may not copy,
+          Ledge and protected by copyright, trademark, and other intellectual property laws. You may not copy,
           modify, distribute, or create derivative works without our prior written consent.
         </p>
       </section>
@@ -141,7 +141,7 @@ export default function TermsOfServicePage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Limitation of Liability</h2>
         <p className="text-white/70 leading-relaxed">
-          TO THE MAXIMUM EXTENT PERMITTED BY LAW, VIZIO SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, LEDGE SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
           CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR
           INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM (A) YOUR
           USE OR INABILITY TO USE THE SERVICE; (B) ANY UNAUTHORIZED ACCESS TO OR USE OF OUR SERVERS AND/OR ANY
@@ -153,7 +153,7 @@ export default function TermsOfServicePage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Indemnification</h2>
         <p className="text-white/70 leading-relaxed">
-          You agree to indemnify and hold harmless Vizio and its officers, directors, employees, and agents from
+          You agree to indemnify and hold harmless Ledge and its officers, directors, employees, and agents from
           any claims, damages, losses, liabilities, and expenses (including reasonable attorneys&apos; fees) arising
           out of or related to your use of the Service or violation of these Terms.
         </p>

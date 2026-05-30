@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [consent, setConsent] = useState(false);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,10 @@ export default function RegisterPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!consent) {
+      setError('You must agree to the Privacy Policy and Terms of Service');
+      return;
+    }
     setError('');
     setLoading(true);
 
@@ -31,7 +36,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, consent }),
       });
 
       const data = await res.json();
@@ -137,7 +142,7 @@ export default function RegisterPage() {
           </CardTitle>
           <CardDescription className="text-white/40">
             {step === 'register'
-              ? 'Start managing your finances with Vizio'
+              ? 'Start managing your finances with Ledge'
               : `We sent a verification code to ${email}`}
           </CardDescription>
         </CardHeader>
@@ -181,14 +186,36 @@ export default function RegisterPage() {
                 </p>
               </div>
 
+              <div className="flex items-start gap-2 pt-1">
+                <input
+                  id="consent"
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  required
+                  className="mt-1 h-4 w-4 rounded border-white/[0.15] bg-white/[0.03] text-emerald-500 focus:ring-emerald-500/40 focus:ring-offset-0 cursor-pointer accent-emerald-500"
+                />
+                <label htmlFor="consent" className="text-xs text-white/50 leading-relaxed cursor-pointer">
+                  I agree to the{' '}
+                  <Link href="/privacy" target="_blank" className="text-emerald-400 hover:text-emerald-300">
+                    Privacy Policy
+                  </Link>{' '}
+                  and{' '}
+                  <Link href="/terms" target="_blank" className="text-emerald-400 hover:text-emerald-300">
+                    Terms of Service
+                  </Link>
+                  , and consent to the collection and processing of my financial data.
+                </label>
+              </div>
+
               {error && (
                 <div className="text-rose-400 text-sm text-center">{error}</div>
               )}
 
               <Button
                 type="submit"
-                disabled={loading}
-                className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all"
+                disabled={loading || !consent}
+                className="w-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>

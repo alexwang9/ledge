@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import prisma from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/ratelimit';
 
 export async function POST(request: NextRequest) {
+  const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
+  const { limited } = await checkRateLimit(ip);
+  if (limited) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { email, code } = body;
