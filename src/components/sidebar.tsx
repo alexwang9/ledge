@@ -38,8 +38,13 @@ export function Sidebar() {
   const sidebarContent = (
     <>
       <div className="p-6 border-b border-white/[0.06]">
-        <h1 className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">Ledge</h1>
-        <p className="text-sm text-white/40">Personal Finance</p>
+        <div className="flex items-center gap-2.5">
+          <img src="/icon-192.png" alt="" width={32} height={32} className="rounded-md" />
+          <div>
+            <h1 className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent leading-tight">Ledge</h1>
+            <p className="text-xs text-white/40 leading-tight">Personal Finance</p>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">

@@ -15,8 +15,11 @@ export default async function HomePage() {
       {/* Header */}
       <header className="border-b border-white/[0.06]">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-            Ledge
+          <div className="flex items-center gap-2">
+            <img src="/icon-192.png" alt="" width={28} height={28} className="rounded-md" />
+            <span className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+              Ledge
+            </span>
           </div>
           <div className="flex gap-4">
             <Link

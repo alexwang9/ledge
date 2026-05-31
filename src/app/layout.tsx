@@ -17,6 +17,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: 'Ledge - Personal Finance',
   description: 'Take control of your finances',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({

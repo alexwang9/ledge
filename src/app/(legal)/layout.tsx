@@ -11,9 +11,12 @@ export default function LegalLayout({
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link
             href="/"
-            className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent"
+            className="flex items-center gap-2"
           >
-            Ledge
+            <img src="/icon-192.png" alt="" width={28} height={28} className="rounded-md" />
+            <span className="text-xl font-semibold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+              Ledge
+            </span>
           </Link>
           <div className="flex gap-4">
             <Link
