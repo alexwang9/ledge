@@ -50,22 +50,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mark code as used
-    await prisma.verificationCode.update({
-      where: { id: verificationCode.id },
-      data: { used: true },
-    });
-
-    // Clean up old codes for this user
-    await prisma.verificationCode.deleteMany({
-      where: {
-        userId: user.id,
-        OR: [
-          { used: true },
-          { expiresAt: { lt: new Date() } },
-        ],
-      },
-    });
+    await prisma.$transaction([
+      prisma.verificationCode.update({
+        where: { id: verificationCode.id },
+        data: { used: true },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { mfaVerifiedAt: new Date() },
+      }),
+      prisma.verificationCode.deleteMany({
+        where: {
+          userId: user.id,
+          OR: [
+            { used: true, id: { not: verificationCode.id } },
+            { expiresAt: { lt: new Date() } },
+          ],
+        },
+      }),
+    ]);
 
     return NextResponse.json({
       verified: true,

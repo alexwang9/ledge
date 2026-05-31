@@ -40,6 +40,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // Require recent MFA verification, atomically consume the token to prevent reuse
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const { count } = await prisma.user.updateMany({
+          where: {
+            id: user.id,
+            mfaVerifiedAt: { gte: fiveMinutesAgo },
+          },
+          data: { mfaVerifiedAt: null },
+        });
+
+        if (count === 0) {
+          return null;
+        }
+
         return {
           id: user.id,
           email: user.email,

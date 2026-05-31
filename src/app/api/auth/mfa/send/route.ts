@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { validateEmail } from '@/lib/validation';
 import { checkRateLimit } from '@/lib/ratelimit';
+import { sendVerificationCode, generateVerificationCode } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
@@ -62,9 +63,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // MFA temporarily disabled — go straight to credential sign-in
+    const recentCode = await prisma.verificationCode.findFirst({
+      where: {
+        userId: user.id,
+        createdAt: { gt: new Date(Date.now() - 60 * 1000) },
+      },
+    });
+
+    if (recentCode) {
+      return NextResponse.json(
+        { error: 'Please wait before requesting a new code' },
+        { status: 429 }
+      );
+    }
+
+    await prisma.verificationCode.deleteMany({
+      where: { userId: user.id, used: false },
+    });
+
+    const code = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.verificationCode.create({
+      data: { userId: user.id, code, expiresAt },
+    });
+
+    const emailSent = await sendVerificationCode(user.email, code);
+
+    if (!emailSent) {
+      return NextResponse.json(
+        { error: 'Failed to send verification code. Please try again.' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
-      mfaRequired: false,
+      mfaRequired: true,
       email: user.email,
     });
   } catch (error) {
