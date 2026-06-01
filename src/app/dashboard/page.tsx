@@ -34,18 +34,27 @@ import {
 } from 'recharts';
 
 interface DashboardData {
-  summary: {
-    totalIncomeThisMonth: number;
-    totalExpensesThisMonth: number;
-    netSavingsThisMonth: number;
-    endingBalance: number;
-    startingBalance: number;
-  };
   monthlyData: Record<
     number,
     { income: number; expenses: number; byCategory: Record<string, number> }
   >;
   categories: Array<{ id: string; name: string; type: 'EXPENSE' | 'INCOME' }>;
+}
+
+interface AccountBalance {
+  type: string;
+  currentBalance: number | null;
+}
+
+interface AccountsData {
+  institutions: Array<{ accounts: AccountBalance[] }>;
+}
+
+interface BalanceTotals {
+  cash: number;
+  credit: number;
+  investments: number;
+  loans: number;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -77,26 +86,43 @@ function LoadingSkeleton() {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [accountsData, setAccountsData] = useState<AccountsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const { toast } = useToast();
 
   const fetchDashboardData = useCallback(async () => {
-    try {
-      const response = await fetch('/api/dashboard');
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-      const dashboardData = await response.json();
-      setData(dashboardData);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+    // Fetch both endpoints in parallel; account-balance failures don't block the dashboard.
+    const [dashboardResult, accountsResult] = await Promise.allSettled([
+      fetch('/api/dashboard').then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch dashboard data');
+        return r.json();
+      }),
+      fetch('/api/accounts').then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch accounts');
+        return r.json();
+      }),
+    ]);
+
+    if (dashboardResult.status === 'fulfilled') {
+      setData(dashboardResult.value);
+    } else {
+      console.error('Failed to fetch dashboard data:', dashboardResult.reason);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Failed to load dashboard data. Please try again.',
       });
-    } finally {
-      setLoading(false);
     }
+
+    if (accountsResult.status === 'fulfilled') {
+      setAccountsData(accountsResult.value);
+    } else {
+      console.error('Failed to fetch accounts:', accountsResult.reason);
+      setAccountsData({ institutions: [] });
+    }
+
+    setLoading(false);
   }, [toast]);
 
   useEffect(() => {
@@ -115,16 +141,24 @@ export default function DashboardPage() {
     return <LoadingSkeleton />;
   }
 
-  const summary = data?.summary || {
-    totalIncomeThisMonth: 0,
-    totalExpensesThisMonth: 0,
-    netSavingsThisMonth: 0,
-    endingBalance: 5000,
-    startingBalance: 5000,
-  };
-
   const monthlyData = data?.monthlyData || {};
   const categories = data?.categories || [];
+
+  const institutions = accountsData?.institutions || [];
+  const totals: BalanceTotals = institutions.reduce<BalanceTotals>(
+    (acc, inst) => {
+      for (const account of inst.accounts) {
+        const balance = account.currentBalance || 0;
+        if (account.type === 'depository') acc.cash += balance;
+        else if (account.type === 'credit') acc.credit += balance;
+        else if (account.type === 'investment' || account.type === 'brokerage') acc.investments += balance;
+        else if (account.type === 'loan' || account.type === 'mortgage') acc.loans += balance;
+      }
+      return acc;
+    },
+    { cash: 0, credit: 0, investments: 0, loans: 0 }
+  );
+  const netBalance = totals.cash + totals.investments - totals.credit - totals.loans;
   const chartData = MONTHS.map((month, index) => ({
     month,
     Income: monthlyData[index]?.income || 0,
@@ -162,34 +196,46 @@ export default function DashboardPage() {
         <PlaidLinkButton onSuccess={handlePlaidSuccess} />
       </div>
 
-      {/* Compact Stats Bar */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-6 md:gap-8 py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.06] overflow-x-auto">
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-white/40 uppercase tracking-wide">Income</span>
-            <span className="text-sm font-medium text-emerald-400">{formatCurrency(summary.totalIncomeThisMonth)}</span>
-          </div>
-          <div className="w-px h-4 bg-white/[0.08]" />
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-white/40 uppercase tracking-wide">Expenses</span>
-            <span className="text-sm font-medium text-rose-400">{formatCurrency(summary.totalExpensesThisMonth)}</span>
-          </div>
-          <div className="w-px h-4 bg-white/[0.08]" />
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-white/40 uppercase tracking-wide">Net</span>
-            <span className={`text-sm font-medium ${summary.netSavingsThisMonth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {summary.netSavingsThisMonth >= 0 ? '+' : ''}{formatCurrency(summary.netSavingsThisMonth)}
-            </span>
-          </div>
-          <div className="w-px h-4 bg-white/[0.08]" />
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-white/40 uppercase tracking-wide">Balance</span>
-            <span className="text-sm font-medium text-white/90">{formatCurrency(summary.endingBalance)}</span>
-          </div>
+      {/* Balance Stats Bar */}
+      <div className="flex items-center gap-6 md:gap-8 py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.06] overflow-x-auto">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-white/40 uppercase tracking-wide">Cash</span>
+          <span className="text-sm font-medium text-emerald-400">{formatCurrency(totals.cash)}</span>
         </div>
-        <p className="text-[10px] text-white/30 px-4">
-          ↔ Transfers between your accounts (e.g. credit-card payments, Venmo) are excluded from totals.
-        </p>
+        {totals.credit > 0 && (
+          <>
+            <div className="w-px h-4 bg-white/[0.08]" />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-white/40 uppercase tracking-wide">Credit</span>
+              <span className="text-sm font-medium text-rose-400">{formatCurrency(totals.credit)}</span>
+            </div>
+          </>
+        )}
+        {totals.investments > 0 && (
+          <>
+            <div className="w-px h-4 bg-white/[0.08]" />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-white/40 uppercase tracking-wide">Investments</span>
+              <span className="text-sm font-medium text-blue-400">{formatCurrency(totals.investments)}</span>
+            </div>
+          </>
+        )}
+        {totals.loans > 0 && (
+          <>
+            <div className="w-px h-4 bg-white/[0.08]" />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-white/40 uppercase tracking-wide">Loans</span>
+              <span className="text-sm font-medium text-rose-400">{formatCurrency(totals.loans)}</span>
+            </div>
+          </>
+        )}
+        <div className="w-px h-4 bg-white/[0.08]" />
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-white/40 uppercase tracking-wide">Net Balance</span>
+          <span className={`text-sm font-medium ${netBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {formatCurrency(netBalance)}
+          </span>
+        </div>
       </div>
 
       {/* Charts Section */}
@@ -198,6 +244,9 @@ export default function DashboardPage() {
         <Card className="bg-white/[0.03] border-white/[0.06] backdrop-blur-sm lg:col-span-2">
           <CardHeader className="p-4 md:p-6">
             <CardTitle className="text-white/90 text-base md:text-lg font-medium">Monthly Overview</CardTitle>
+            <p className="text-[11px] text-white/30 mt-1">
+              ↔ Transfers between your accounts (e.g. credit-card payments, Venmo) are excluded.
+            </p>
           </CardHeader>
           <CardContent className="p-2 md:p-6 pt-0">
             <div className="h-64 md:h-80">
