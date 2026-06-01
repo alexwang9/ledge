@@ -13,6 +13,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { MultiSelect } from '@/components/multi-select';
 import { CategorySelector } from '@/components/category-selector';
+import { FlowSelector, type FlowType } from '@/components/flow-selector';
 import { useToast } from '@/hooks/use-toast';
 
 interface Transaction {
@@ -24,6 +25,9 @@ interface Transaction {
   category: string;
   originalCategory: string | null;
   hasOverride: boolean;
+  flowType: FlowType;
+  originalFlowType: FlowType;
+  hasFlowOverride: boolean;
   pending: boolean;
   account: string;
 }
@@ -52,6 +56,7 @@ export default function TransactionsPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showTransfers, setShowTransfers] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
@@ -66,6 +71,7 @@ export default function TransactionsPage() {
       if (dateRange?.to) params.set('endDate', dateRange.to.toISOString());
       if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
       if (debouncedSearch) params.set('search', debouncedSearch);
+      if (showTransfers) params.set('includeTransfers', 'true');
 
       const response = await fetch(`/api/transactions?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch');
@@ -78,7 +84,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, selectedCategories, debouncedSearch, toast]);
+  }, [dateRange, selectedCategories, debouncedSearch, showTransfers, toast]);
 
   useEffect(() => {
     fetchTransactions();
@@ -115,6 +121,24 @@ export default function TransactionsPage() {
     } catch (error) {
       console.error('Failed to update category:', error);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to update category' });
+    }
+  };
+
+  const handleFlowChange = async (transactionId: string, newFlow: FlowType) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flowType: newFlow }),
+      });
+      if (!response.ok) throw new Error('Update failed');
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === transactionId ? { ...t, flowType: newFlow, hasFlowOverride: true } : t))
+      );
+      toast({ title: 'Flow updated', description: `Marked as ${newFlow.toLowerCase()}` });
+    } catch (error) {
+      console.error('Failed to update flow:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update flow type' });
     }
   };
 
@@ -175,11 +199,14 @@ export default function TransactionsPage() {
       ),
       cell: ({ row }) => {
         const amount = row.getValue('amount') as number;
-        const isIncome = amount < 0;
         return (
-          <div className={`font-medium ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {isIncome ? '+' : '-'}{formatCurrency(amount)}
-          </div>
+          <FlowSelector
+            value={row.original.flowType}
+            hasOverride={row.original.hasFlowOverride}
+            amount={amount}
+            formattedAmount={formatCurrency(amount)}
+            onSelect={(flow) => handleFlowChange(row.original.id, flow)}
+          />
         );
       },
     },
@@ -240,13 +267,25 @@ export default function TransactionsPage() {
             className="pl-9 w-full md:w-64 bg-white/[0.03] border-white/[0.08] text-white placeholder:text-white/30 focus:border-white/20 focus:ring-0"
           />
         </div>
-        {(dateRange || selectedCategories.length > 0 || searchQuery) && (
+        <Button
+          variant="ghost"
+          onClick={() => setShowTransfers((v) => !v)}
+          className={`text-sm transition-colors ${
+            showTransfers
+              ? 'text-slate-200 bg-white/[0.06] hover:bg-white/[0.08]'
+              : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+          }`}
+        >
+          {showTransfers ? '↔ Showing transfers' : '↔ Show transfers'}
+        </Button>
+        {(dateRange || selectedCategories.length > 0 || searchQuery || showTransfers) && (
           <Button
             variant="ghost"
             onClick={() => {
               setDateRange(undefined);
               setSelectedCategories([]);
               setSearchQuery('');
+              setShowTransfers(false);
             }}
             className="text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
           >
@@ -290,7 +329,7 @@ export default function TransactionsPage() {
           transactions.map((txn) => (
             <Card key={txn.id} className="bg-white/[0.03] border-white/[0.06]">
               <CardContent className="p-4">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-white/80 truncate">{txn.merchantName || txn.name}</div>
                     <div className="text-xs text-white/40">{format(new Date(txn.date), 'MMM d, yyyy')}</div>
@@ -303,9 +342,13 @@ export default function TransactionsPage() {
                       />
                     </div>
                   </div>
-                  <div className={`font-semibold ${txn.amount < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {txn.amount < 0 ? '+' : '-'}{formatCurrency(txn.amount)}
-                  </div>
+                  <FlowSelector
+                    value={txn.flowType}
+                    hasOverride={txn.hasFlowOverride}
+                    amount={txn.amount}
+                    formattedAmount={formatCurrency(txn.amount)}
+                    onSelect={(flow) => handleFlowChange(txn.id, flow)}
+                  />
                 </div>
               </CardContent>
             </Card>

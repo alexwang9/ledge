@@ -45,11 +45,12 @@ export async function GET(request: NextRequest) {
     const spendingByCategory: Record<string, number> = {};
 
     for (const txn of transactions) {
+      const effectiveFlow = txn.flowTypeOverride ?? txn.flowType;
+      if (effectiveFlow !== 'EXPENSE') continue;
+
       const category = txn.categoryOverride || txn.category || 'Uncategorized';
-      // Positive amounts are expenses in Plaid
-      if (txn.amount > 0) {
-        spendingByCategory[category] = (spendingByCategory[category] || 0) + txn.amount;
-      }
+      // Sign-preserving sum so credit-card refunds reduce the category total.
+      spendingByCategory[category] = (spendingByCategory[category] || 0) + txn.amount;
     }
 
     // Build budget data with spending

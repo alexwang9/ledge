@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get('endDate');
   const categories = searchParams.get('categories')?.split(',').filter(Boolean);
   const search = searchParams.get('search');
+  const includeTransfers = searchParams.get('includeTransfers') === 'true';
 
   // Get user's PlaidItems
   const plaidItems = await prisma.plaidItem.findMany({
@@ -54,10 +55,18 @@ export async function GET(request: NextRequest) {
     where.merchantName = { contains: search, mode: 'insensitive' };
   }
 
-  const transactions = await prisma.transaction.findMany({
+  const rawTransactions = await prisma.transaction.findMany({
     where,
     orderBy: { date: 'desc' },
   });
+
+  // Filter transfers in-memory so we can honor flowTypeOverride (effective flow).
+  // Default: hide transfers. With ?includeTransfers=true, show everything.
+  const transactions = includeTransfers
+    ? rawTransactions
+    : rawTransactions.filter(
+        (t) => (t.flowTypeOverride ?? t.flowType) !== 'TRANSFER'
+      );
 
   // Get all unique categories for filter
   const allCategories = await prisma.budgetCategory.findMany({
@@ -89,6 +98,9 @@ export async function GET(request: NextRequest) {
       category: t.categoryOverride || t.category || 'Other',
       originalCategory: t.category,
       hasOverride: !!t.categoryOverride,
+      flowType: t.flowTypeOverride ?? t.flowType,
+      originalFlowType: t.flowType,
+      hasFlowOverride: !!t.flowTypeOverride,
       pending: t.pending,
       account: plaidItemMap[t.plaidItemId] || 'Unknown',
     })),

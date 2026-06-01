@@ -41,13 +41,15 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Calculate spending by merchant
+    // Calculate spending by merchant — EXPENSE flow only, excludes transfers.
     const spendingByMerchant: Record<string, number> = {};
     for (const txn of transactions) {
-      if (txn.merchantName && txn.amount > 0) {
-        spendingByMerchant[txn.merchantName] =
-          (spendingByMerchant[txn.merchantName] || 0) + txn.amount;
-      }
+      const effectiveFlow = txn.flowTypeOverride ?? txn.flowType;
+      if (effectiveFlow !== 'EXPENSE') continue;
+      if (!txn.merchantName) continue;
+
+      spendingByMerchant[txn.merchantName] =
+        (spendingByMerchant[txn.merchantName] || 0) + txn.amount;
     }
 
     // Build merchant budget data with spending

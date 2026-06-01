@@ -60,26 +60,27 @@ export async function GET() {
     monthlyData[month] = { income: 0, expenses: 0, byCategory: {} };
   }
 
-  // Process transactions
+  // Process transactions. Transfers (credit-card payoffs, Venmo cashouts, etc.)
+  // are excluded from income/expense totals and from category breakdowns —
+  // they would otherwise double-count.
   for (const txn of transactions) {
+    const effectiveFlow = txn.flowTypeOverride ?? txn.flowType;
+    if (effectiveFlow === 'TRANSFER') continue;
+
     const month = new Date(txn.date).getMonth();
     const category = txn.categoryOverride || txn.category || 'Other';
 
-    // In Plaid, positive amounts are money leaving the account (expenses)
-    // Negative amounts are money coming in (income)
-    if (txn.amount < 0) {
-      // Income (negative in Plaid)
+    if (effectiveFlow === 'INCOME') {
       monthlyData[month].income += Math.abs(txn.amount);
     } else {
-      // Expense (positive in Plaid)
+      // EXPENSE: sign-preserving so refunds (negative amounts on credit cards)
+      // net out against purchases in the same category.
       monthlyData[month].expenses += txn.amount;
+      if (!monthlyData[month].byCategory[category]) {
+        monthlyData[month].byCategory[category] = 0;
+      }
+      monthlyData[month].byCategory[category] += txn.amount;
     }
-
-    // Track by category
-    if (!monthlyData[month].byCategory[category]) {
-      monthlyData[month].byCategory[category] = 0;
-    }
-    monthlyData[month].byCategory[category] += Math.abs(txn.amount);
   }
 
   // Calculate current month summary

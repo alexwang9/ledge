@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { mapAccountType } from '@/lib/flow-type';
 
 export async function POST(request: Request) {
   const auth = await requireAuth();
@@ -41,6 +42,36 @@ export async function POST(request: Request) {
         cursor: null, // Will be set after first sync
       },
     });
+
+    // Seed Account rows immediately so the user sees them before the first sync.
+    // The sync pipeline will also upsert these, so this is a best-effort prefetch.
+    try {
+      const accountsResp = await plaidClient.accountsGet({ access_token: accessToken });
+      for (const acct of accountsResp.data.accounts) {
+        await prisma.account.upsert({
+          where: { plaidAccountId: acct.account_id },
+          create: {
+            plaidItemId: plaidItem.id,
+            plaidAccountId: acct.account_id,
+            name: acct.name,
+            officialName: acct.official_name ?? null,
+            mask: acct.mask ?? null,
+            type: mapAccountType(acct.type),
+            subtype: acct.subtype ?? null,
+          },
+          update: {
+            name: acct.name,
+            officialName: acct.official_name ?? null,
+            mask: acct.mask ?? null,
+            type: mapAccountType(acct.type),
+            subtype: acct.subtype ?? null,
+          },
+        });
+      }
+    } catch (err) {
+      // Non-fatal: next sync will upsert accounts.
+      console.error('Failed to prefetch accounts on link:', err);
+    }
 
     return NextResponse.json({
       success: true,

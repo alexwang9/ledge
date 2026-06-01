@@ -14,7 +14,6 @@ type CategoryMapping = {
 const PLAID_TO_BUDGET_CATEGORY: Record<string, string> = {
   // Income categories
   INCOME: 'Wages',
-  TRANSFER_IN: 'Other', // Income: Other
 
   // Expense categories
   BANK_FEES: 'Other',
@@ -30,7 +29,6 @@ const PLAID_TO_BUDGET_CATEGORY: Record<string, string> = {
   RENT_AND_UTILITIES: 'Utilities',
   TRANSPORTATION: 'Transportation',
   TRAVEL: 'Travel',
-  TRANSFER_OUT: 'Other',
 };
 
 // More specific mappings for detailed categories (secondary level)
@@ -41,7 +39,6 @@ const DETAILED_CATEGORY_OVERRIDES: Record<string, string> = {
 
   // Gifts
   'GENERAL_MERCHANDISE_GIFT_AND_NOVELTY': 'Gifts',
-  'TRANSFER_OUT_GIFT': 'Gifts',
 
   // Health/Medical
   'PERSONAL_CARE_PHARMACIES': 'Health/Medical',
@@ -61,7 +58,6 @@ const DETAILED_CATEGORY_OVERRIDES: Record<string, string> = {
 
   // Insurance
   'LOAN_PAYMENTS_INSURANCE': 'Insurance',
-  'TRANSFER_OUT_INSURANCE': 'Insurance',
 
   // Pets
   'GENERAL_MERCHANDISE_PET_SUPPLIES': 'Pets',
@@ -96,7 +92,6 @@ const DETAILED_CATEGORY_OVERRIDES: Record<string, string> = {
 
   // Debt
   'LOAN_PAYMENTS_CAR_PAYMENT': 'Debt',
-  'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT': 'Debt',
   'LOAN_PAYMENTS_MORTGAGE_PAYMENT': 'Debt',
   'LOAN_PAYMENTS_STUDENT_LOAN': 'Debt',
 };
@@ -135,18 +130,4 @@ export function mapPlaidCategory(
     category,
     subcategory: secondary?.toLowerCase().replace(/_/g, ' ') || null,
   };
-}
-
-/**
- * Determines if a transaction is income based on Plaid's category
- */
-export function isIncomeCategory(
-  detailedCategory: string[] | null | undefined
-): boolean {
-  if (!detailedCategory || detailedCategory.length === 0) {
-    return false;
-  }
-
-  const primary = detailedCategory[0];
-  return primary === 'INCOME' || primary === 'TRANSFER_IN';
 }

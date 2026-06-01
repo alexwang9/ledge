@@ -163,28 +163,33 @@ export default function DashboardPage() {
       </div>
 
       {/* Compact Stats Bar */}
-      <div className="flex items-center gap-6 md:gap-8 py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.06] overflow-x-auto">
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-white/40 uppercase tracking-wide">Income</span>
-          <span className="text-sm font-medium text-emerald-400">{formatCurrency(summary.totalIncomeThisMonth)}</span>
+      <div className="space-y-1">
+        <div className="flex items-center gap-6 md:gap-8 py-3 px-4 rounded-lg bg-white/[0.02] border border-white/[0.06] overflow-x-auto">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-white/40 uppercase tracking-wide">Income</span>
+            <span className="text-sm font-medium text-emerald-400">{formatCurrency(summary.totalIncomeThisMonth)}</span>
+          </div>
+          <div className="w-px h-4 bg-white/[0.08]" />
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-white/40 uppercase tracking-wide">Expenses</span>
+            <span className="text-sm font-medium text-rose-400">{formatCurrency(summary.totalExpensesThisMonth)}</span>
+          </div>
+          <div className="w-px h-4 bg-white/[0.08]" />
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-white/40 uppercase tracking-wide">Net</span>
+            <span className={`text-sm font-medium ${summary.netSavingsThisMonth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {summary.netSavingsThisMonth >= 0 ? '+' : ''}{formatCurrency(summary.netSavingsThisMonth)}
+            </span>
+          </div>
+          <div className="w-px h-4 bg-white/[0.08]" />
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-white/40 uppercase tracking-wide">Balance</span>
+            <span className="text-sm font-medium text-white/90">{formatCurrency(summary.endingBalance)}</span>
+          </div>
         </div>
-        <div className="w-px h-4 bg-white/[0.08]" />
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-white/40 uppercase tracking-wide">Expenses</span>
-          <span className="text-sm font-medium text-rose-400">{formatCurrency(summary.totalExpensesThisMonth)}</span>
-        </div>
-        <div className="w-px h-4 bg-white/[0.08]" />
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-white/40 uppercase tracking-wide">Net</span>
-          <span className={`text-sm font-medium ${summary.netSavingsThisMonth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {summary.netSavingsThisMonth >= 0 ? '+' : ''}{formatCurrency(summary.netSavingsThisMonth)}
-          </span>
-        </div>
-        <div className="w-px h-4 bg-white/[0.08]" />
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-white/40 uppercase tracking-wide">Balance</span>
-          <span className="text-sm font-medium text-white/90">{formatCurrency(summary.endingBalance)}</span>
-        </div>
+        <p className="text-[10px] text-white/30 px-4">
+          ↔ Transfers between your accounts (e.g. credit-card payments, Venmo) are excluded from totals.
+        </p>
       </div>
 
       {/* Charts Section */}

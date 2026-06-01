@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { FlowType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+
+const VALID_FLOW_TYPES: FlowType[] = ['INCOME', 'EXPENSE', 'TRANSFER'];
 
 export async function PATCH(
   request: NextRequest,
@@ -12,7 +15,14 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { category } = body;
+    const { category, flowType } = body as {
+      category?: string | null;
+      flowType?: FlowType | null;
+    };
+
+    if (flowType !== undefined && flowType !== null && !VALID_FLOW_TYPES.includes(flowType)) {
+      return NextResponse.json({ error: 'Invalid flowType' }, { status: 400 });
+    }
 
     // Get the transaction and verify ownership
     const transaction = await prisma.transaction.findUnique({
@@ -31,10 +41,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Update the category override
+    const data: { categoryOverride?: string | null; flowTypeOverride?: FlowType | null } = {};
+    if (category !== undefined) data.categoryOverride = category;
+    if (flowType !== undefined) data.flowTypeOverride = flowType;
+
     const updated = await prisma.transaction.update({
       where: { id },
-      data: { categoryOverride: category },
+      data,
     });
 
     return NextResponse.json({
@@ -43,6 +56,9 @@ export async function PATCH(
         id: updated.id,
         category: updated.categoryOverride || updated.category,
         hasOverride: !!updated.categoryOverride,
+        flowType: updated.flowTypeOverride ?? updated.flowType,
+        originalFlowType: updated.flowType,
+        hasFlowOverride: !!updated.flowTypeOverride,
       },
     });
   } catch (error) {

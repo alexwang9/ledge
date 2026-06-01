@@ -55,29 +55,67 @@ model PlaidItem {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  accounts     Account[]
 
   @@index([userId])
 }
 
+enum AccountType {
+  depository
+  credit
+  loan
+  investment
+  other
+}
+
+enum FlowType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+model Account {
+  id             String      @id @default(cuid())
+  plaidItemId    String
+  plaidAccountId String      @unique
+  name           String
+  officialName   String?
+  mask           String?
+  type           AccountType
+  subtype        String?
+  createdAt      DateTime    @default(now())
+
+  plaidItem    PlaidItem     @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([plaidItemId])
+}
+
 model Transaction {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   plaidItemId        String
-  plaidTransactionId String   @unique
+  plaidTransactionId String    @unique
+  accountId          String?
   date               DateTime
   name               String
   merchantName       String?
   amount             Float
   category           String?
   subcategory        String?
-  categoryOverride   String?  // User-assigned category that takes precedence over auto-mapped
-  pending            Boolean  @default(false)
-  createdAt          DateTime @default(now())
+  categoryOverride   String?   // User-assigned category that takes precedence over auto-mapped
+  flowType           FlowType  @default(EXPENSE)
+  flowTypeOverride   FlowType?
+  pending            Boolean   @default(false)
+  createdAt          DateTime  @default(now())
 
   plaidItem PlaidItem @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  account   Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([plaidItemId])
+  @@index([accountId])
   @@index([date])
   @@index([category])
+  @@index([flowType])
 }
 
 enum BudgetCategoryType {

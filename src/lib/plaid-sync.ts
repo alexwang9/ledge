@@ -1,7 +1,9 @@
+import { AccountType, FlowType } from '@prisma/client';
 import { RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import { plaidClient } from '@/lib/plaid';
 import prisma from '@/lib/prisma';
 import { mapPlaidCategory } from '@/lib/category-mapping';
+import { classifyFlow, mapAccountType } from '@/lib/flow-type';
 
 type PlaidItemRecord = {
   id: string;
@@ -9,7 +11,72 @@ type PlaidItemRecord = {
   cursor: string | null;
 };
 
+type AccountInfo = {
+  id: string;
+  type: AccountType;
+};
+
+async function upsertAccountsForItem(
+  plaidItem: PlaidItemRecord
+): Promise<Map<string, AccountInfo>> {
+  const accountsResp = await plaidClient.accountsGet({
+    access_token: plaidItem.accessToken,
+  });
+
+  const accountMap = new Map<string, AccountInfo>();
+
+  for (const acct of accountsResp.data.accounts) {
+    const type = mapAccountType(acct.type);
+    const upserted = await prisma.account.upsert({
+      where: { plaidAccountId: acct.account_id },
+      create: {
+        plaidItemId: plaidItem.id,
+        plaidAccountId: acct.account_id,
+        name: acct.name,
+        officialName: acct.official_name ?? null,
+        mask: acct.mask ?? null,
+        type,
+        subtype: acct.subtype ?? null,
+      },
+      update: {
+        name: acct.name,
+        officialName: acct.official_name ?? null,
+        mask: acct.mask ?? null,
+        type,
+        subtype: acct.subtype ?? null,
+      },
+    });
+    accountMap.set(acct.account_id, { id: upserted.id, type });
+  }
+
+  return accountMap;
+}
+
+function buildCategoryArray(txn: PlaidTransaction): string[] | null {
+  const pfc = txn.personal_finance_category;
+  if (!pfc?.primary) return null;
+  if (pfc.detailed) {
+    return [pfc.primary, pfc.detailed.replace(`${pfc.primary}_`, '')];
+  }
+  return [pfc.primary];
+}
+
+function getFlowType(
+  txn: PlaidTransaction,
+  accountType: AccountType | null
+): FlowType {
+  const pfc = txn.personal_finance_category;
+  return classifyFlow(
+    pfc?.primary ?? null,
+    pfc?.detailed ?? null,
+    accountType,
+    txn.name
+  );
+}
+
 export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
+  const accountMap = await upsertAccountsForItem(plaidItem);
+
   let cursor = plaidItem.cursor;
   let hasMore = true;
 
@@ -34,19 +101,9 @@ export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
   }
 
   for (const txn of allAdded) {
-    const { category, subcategory } = mapPlaidCategory(
-      txn.personal_finance_category?.detailed
-        ? [
-            txn.personal_finance_category.primary,
-            txn.personal_finance_category.detailed.replace(
-              `${txn.personal_finance_category.primary}_`,
-              ''
-            ),
-          ]
-        : txn.personal_finance_category?.primary
-          ? [txn.personal_finance_category.primary]
-          : null
-    );
+    const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
+    const acct = accountMap.get(txn.account_id);
+    const flowType = getFlowType(txn, acct?.type ?? null);
 
     await prisma.transaction.upsert({
       where: { plaidTransactionId: txn.transaction_id },
@@ -57,6 +114,8 @@ export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
         amount: txn.amount,
         category,
         subcategory,
+        accountId: acct?.id ?? null,
+        flowType,
         pending: txn.pending,
       },
       create: {
@@ -68,25 +127,17 @@ export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
         amount: txn.amount,
         category,
         subcategory,
+        accountId: acct?.id ?? null,
+        flowType,
         pending: txn.pending,
       },
     });
   }
 
   for (const txn of allModified) {
-    const { category, subcategory } = mapPlaidCategory(
-      txn.personal_finance_category?.detailed
-        ? [
-            txn.personal_finance_category.primary,
-            txn.personal_finance_category.detailed.replace(
-              `${txn.personal_finance_category.primary}_`,
-              ''
-            ),
-          ]
-        : txn.personal_finance_category?.primary
-          ? [txn.personal_finance_category.primary]
-          : null
-    );
+    const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
+    const acct = accountMap.get(txn.account_id);
+    const flowType = getFlowType(txn, acct?.type ?? null);
 
     await prisma.transaction.update({
       where: { plaidTransactionId: txn.transaction_id },
@@ -97,6 +148,8 @@ export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
         amount: txn.amount,
         category,
         subcategory,
+        accountId: acct?.id ?? null,
+        flowType,
         pending: txn.pending,
       },
     });
@@ -104,9 +157,9 @@ export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
 
   for (const removed of allRemoved) {
     if (removed.transaction_id) {
-      await prisma.transaction.delete({
-        where: { plaidTransactionId: removed.transaction_id },
-      }).catch(() => {});
+      await prisma.transaction
+        .delete({ where: { plaidTransactionId: removed.transaction_id } })
+        .catch(() => {});
     }
   }
 
