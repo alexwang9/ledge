@@ -1,26 +1,54 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useRouter } from 'next/navigation';
 
+function clearStoredLinkSession() {
+  localStorage.removeItem('plaid_link_token');
+  localStorage.removeItem('plaid_link_mode');
+}
+
 function OAuthHandler() {
   const router = useRouter();
+  // Plaid's OAuth flow requires re-initializing Link with the same link_token
+  // that started the flow; PlaidLinkButton persists it before redirecting.
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [mode, setMode] = useState<'create' | 'update'>('create');
   const receivedRedirectUri = typeof window !== 'undefined' ? window.location.href : '';
 
+  useEffect(() => {
+    const storedToken = localStorage.getItem('plaid_link_token');
+    if (!storedToken) {
+      router.replace('/dashboard/accounts');
+      return;
+    }
+    setMode(localStorage.getItem('plaid_link_mode') === 'update' ? 'update' : 'create');
+    setLinkToken(storedToken);
+  }, [router]);
+
   const { open, ready } = usePlaidLink({
-    token: null,
+    token: linkToken,
     receivedRedirectUri,
     onSuccess: async (publicToken, metadata) => {
-      await fetch('/api/plaid/exchange-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ public_token: publicToken, metadata }),
-      });
-      await fetch('/api/plaid/sync-transactions', { method: 'POST' });
-      router.push('/dashboard/accounts');
+      try {
+        // Update-mode public tokens must not be exchanged — doing so would
+        // create a duplicate PlaidItem for an already-linked institution.
+        if (mode === 'create') {
+          await fetch('/api/plaid/exchange-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ public_token: publicToken, metadata }),
+          });
+        }
+        await fetch('/api/plaid/sync-transactions', { method: 'POST' });
+      } finally {
+        clearStoredLinkSession();
+        router.push('/dashboard/accounts');
+      }
     },
     onExit: () => {
+      clearStoredLinkSession();
       router.push('/dashboard/accounts');
     },
   });

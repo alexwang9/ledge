@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CountryCode, Products } from 'plaid';
 import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
+import prisma from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
@@ -9,7 +10,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const { access_token } = body as { access_token?: string };
+    const { plaid_item_id } = body as { plaid_item_id?: unknown };
+
+    // Update mode (re-link): resolve the access token server-side, scoped to
+    // the session user. The token itself never leaves the server.
+    let accessToken: string | undefined;
+    if (plaid_item_id !== undefined) {
+      if (typeof plaid_item_id !== 'string' || !plaid_item_id) {
+        return NextResponse.json({ error: 'Invalid plaid_item_id' }, { status: 400 });
+      }
+      const item = await prisma.plaidItem.findFirst({
+        where: { id: plaid_item_id, userId: auth.userId },
+        select: { accessToken: true },
+      });
+      if (!item) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
+      accessToken = item.accessToken;
+    }
 
     const baseParams = {
       user: { client_user_id: auth.userId },
@@ -22,8 +40,8 @@ export async function POST(request: NextRequest) {
     };
 
     // Update mode: pass access_token instead of products
-    const params = access_token
-      ? { ...baseParams, access_token }
+    const params = accessToken
+      ? { ...baseParams, access_token: accessToken }
       : { ...baseParams, products: [Products.Transactions] };
 
     const response = await plaidClient.linkTokenCreate(params);

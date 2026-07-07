@@ -7,17 +7,17 @@ import { useToast } from '@/hooks/use-toast';
 
 interface PlaidLinkButtonProps {
   onSuccess: () => void;
-  /** Pass the institution's accessToken to launch Plaid in update mode (re-link). */
-  accessToken?: string;
+  /** Pass the institution's PlaidItem id to launch Plaid in update mode (re-link). */
+  plaidItemId?: string;
   label?: string;
   className?: string;
 }
 
-export function PlaidLinkButton({ onSuccess, accessToken, label, className }: PlaidLinkButtonProps) {
+export function PlaidLinkButton({ onSuccess, plaidItemId, label, className }: PlaidLinkButtonProps) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const isUpdateMode = Boolean(accessToken);
+  const isUpdateMode = Boolean(plaidItemId);
 
   useEffect(() => {
     const fetchLinkToken = async () => {
@@ -25,11 +25,15 @@ export function PlaidLinkButton({ onSuccess, accessToken, label, className }: Pl
         const response = await fetch('/api/plaid/create-link-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(accessToken ? { access_token: accessToken } : {}),
+          body: JSON.stringify(plaidItemId ? { plaid_item_id: plaidItemId } : {}),
         });
         const data = await response.json();
         if (data.link_token) {
           setLinkToken(data.link_token);
+          // Persisted so the /oauth redirect page can re-initialize Link with
+          // the same token, as Plaid's OAuth flow requires.
+          localStorage.setItem('plaid_link_token', data.link_token);
+          localStorage.setItem('plaid_link_mode', plaidItemId ? 'update' : 'create');
         } else {
           toast({
             variant: 'destructive',
@@ -47,7 +51,7 @@ export function PlaidLinkButton({ onSuccess, accessToken, label, className }: Pl
     };
 
     fetchLinkToken();
-  }, [toast, accessToken]);
+  }, [toast, plaidItemId]);
 
   const handleOnSuccess = useCallback(
     async (publicToken: string, metadata: unknown) => {

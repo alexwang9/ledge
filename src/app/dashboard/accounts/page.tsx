@@ -37,7 +37,6 @@ interface Institution {
   institutionName: string;
   connectedAt: string;
   needsRelink: boolean;
-  accessToken: string;
   accounts: Account[];
   error: string | null;
 }
@@ -335,7 +334,7 @@ export default function AccountsPage() {
                         </p>
                       </div>
                       <PlaidLinkButton
-                        accessToken={institution.accessToken}
+                        plaidItemId={institution.id}
                         onSuccess={handlePlaidSuccess}
                         className="shrink-0 text-xs px-3 py-1.5 h-auto bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/30 transition-all rounded-md"
                       />
