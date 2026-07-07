@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { clampMonthYear } from '@/lib/validation';
+import { roundCents } from '@/lib/money';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth();
@@ -64,15 +65,17 @@ export async function GET(request: NextRequest) {
       id: category.id,
       name: category.name,
       budgeted: category.monthlyLimit ?? 0,
-      spent: spendingByCategory[category.name] || 0,
-      remaining: (category.monthlyLimit ?? 0) - (spendingByCategory[category.name] || 0),
+      spent: roundCents(spendingByCategory[category.name] || 0),
+      remaining: roundCents(
+        (category.monthlyLimit ?? 0) - (spendingByCategory[category.name] || 0)
+      ),
       hasExplicitBudget: category.monthlyLimit !== null,
     }));
 
     // Calculate totals
-    const totalBudgeted = budgets.reduce((sum, b) => sum + b.budgeted, 0);
-    const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
-    const totalRemaining = totalBudgeted - totalSpent;
+    const totalBudgeted = roundCents(budgets.reduce((sum, b) => sum + b.budgeted, 0));
+    const totalSpent = roundCents(budgets.reduce((sum, b) => sum + b.spent, 0));
+    const totalRemaining = roundCents(totalBudgeted - totalSpent);
 
     // Calculate categories with budgets set
     const budgetedCategories = budgets.filter((b) => b.budgeted > 0);

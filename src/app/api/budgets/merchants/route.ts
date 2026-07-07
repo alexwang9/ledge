@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { clampMonthYear } from '@/lib/validation';
+import { roundCents } from '@/lib/money';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth();
@@ -60,13 +61,13 @@ export async function GET(request: NextRequest) {
     const budgetedMerchantNames = new Set(merchantBudgets.map((mb) => mb.merchantName));
 
     const merchants = merchantBudgets.map((mb) => {
-      const spent = spendingByMerchant[mb.merchantName] || 0;
+      const spent = roundCents(spendingByMerchant[mb.merchantName] || 0);
       return {
         id: mb.id,
         merchantName: mb.merchantName,
         monthlyLimit: mb.monthlyLimit,
         spent,
-        remaining: mb.monthlyLimit - spent,
+        remaining: roundCents(mb.monthlyLimit - spent),
       };
     });
 
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Sorted by spending (highest first)
     const availableMerchants = Object.entries(spendingByMerchant)
       .filter(([merchantName]) => !budgetedMerchantNames.has(merchantName))
-      .map(([merchantName, spent]) => ({ merchantName, spent }))
+      .map(([merchantName, spent]) => ({ merchantName, spent: roundCents(spent) }))
       .sort((a, b) => b.spent - a.spent);
 
     return NextResponse.json({

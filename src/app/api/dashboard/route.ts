@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { roundCents } from '@/lib/money';
 
 export async function GET() {
   const auth = await requireAuth();
@@ -83,42 +84,25 @@ export async function GET() {
     }
   }
 
-  // Calculate current month summary
-  const currentMonth = new Date().getMonth();
-  const currentMonthData = monthlyData[currentMonth];
-
-  // Calculate cumulative net savings
-  let cumulativeNetSavings = 0;
-  for (let month = 0; month <= currentMonth; month++) {
-    cumulativeNetSavings +=
-      monthlyData[month].income - monthlyData[month].expenses;
+  // Round accumulated float sums at the response boundary
+  for (const month of Object.keys(monthlyData)) {
+    const data = monthlyData[Number(month)];
+    data.income = roundCents(data.income);
+    data.expenses = roundCents(data.expenses);
+    for (const category of Object.keys(data.byCategory)) {
+      data.byCategory[category] = roundCents(data.byCategory[category]);
+    }
   }
 
-  const startingBalance = 0;
-  const endingBalance = startingBalance + cumulativeNetSavings;
-
+  // The dashboard page consumes only monthlyData and categories; the old
+  // summary/transactions fields shipped a full year of transactions to the
+  // client for nothing.
   return NextResponse.json({
-    summary: {
-      totalIncomeThisMonth: currentMonthData.income,
-      totalExpensesThisMonth: currentMonthData.expenses,
-      netSavingsThisMonth: currentMonthData.income - currentMonthData.expenses,
-      endingBalance,
-      startingBalance,
-    },
     monthlyData,
     categories: categories.map((c) => ({
       id: c.id,
       name: c.name,
       type: c.type,
-    })),
-    transactions: transactions.map((t) => ({
-      id: t.id,
-      date: t.date,
-      name: t.name,
-      merchantName: t.merchantName,
-      amount: t.amount,
-      category: t.category,
-      pending: t.pending,
     })),
   });
 }
