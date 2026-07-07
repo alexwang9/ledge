@@ -67,10 +67,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
   }
 
-  const body = JSON.parse(rawBody);
-  const { webhook_type, webhook_code, item_id, error } = body;
-
   try {
+    const body = JSON.parse(rawBody);
+    const { webhook_type, webhook_code, item_id, error } = body;
+
     if (webhook_type === 'TRANSACTIONS' && webhook_code === 'SYNC_UPDATES_AVAILABLE') {
       await handleSyncUpdatesAvailable(item_id);
     } else if (webhook_type === 'ITEM' && webhook_code === 'ERROR') {

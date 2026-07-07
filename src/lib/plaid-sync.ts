@@ -75,6 +75,48 @@ function getFlowType(
   );
 }
 
+/**
+ * Extracts Plaid's error_code from an axios-shaped SDK error, or null.
+ */
+export function getPlaidErrorCode(err: unknown): string | null {
+  const data = (err as { response?: { data?: { error_code?: unknown } } })?.response?.data;
+  return typeof data?.error_code === 'string' ? data.error_code : null;
+}
+
+async function upsertTransaction(
+  txn: PlaidTransaction,
+  plaidItemId: string,
+  accountMap: Map<string, AccountInfo>
+): Promise<void> {
+  const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
+  const acct = accountMap.get(txn.account_id);
+  const flowType = getFlowType(txn, acct?.type ?? null);
+
+  const fields = {
+    date: new Date(txn.date),
+    name: txn.name,
+    merchantName: txn.merchant_name || null,
+    amount: txn.amount,
+    category,
+    subcategory,
+    accountId: acct?.id ?? null,
+    flowType,
+    pending: txn.pending,
+  };
+
+  await prisma.transaction.upsert({
+    where: { plaidTransactionId: txn.transaction_id },
+    update: fields,
+    create: {
+      plaidItemId,
+      plaidTransactionId: txn.transaction_id,
+      ...fields,
+    },
+  });
+}
+
+const MAX_SYNC_ATTEMPTS = 3;
+
 export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
   // Decrypt here (rather than in callers) so both the sync route and the
   // webhook handler get it for free.
@@ -82,94 +124,65 @@ export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
 
   const accountMap = await upsertAccountsForItem(plaidItem);
 
+  // Fetch all pages before applying anything, so a mid-pagination failure
+  // never leaves partial state, and a mutation-during-pagination restart is
+  // just "throw away the accumulators and start over from the saved cursor".
   let cursor = plaidItem.cursor;
-  let hasMore = true;
+  let allAdded: PlaidTransaction[] = [];
+  let allModified: PlaidTransaction[] = [];
+  let allRemoved: RemovedTransaction[] = [];
 
-  const allAdded: PlaidTransaction[] = [];
-  const allModified: PlaidTransaction[] = [];
-  const allRemoved: RemovedTransaction[] = [];
+  for (let attempt = 1; ; attempt++) {
+    try {
+      let hasMore = true;
+      while (hasMore) {
+        const response = await plaidClient.transactionsSync({
+          access_token: plaidItem.accessToken,
+          cursor: cursor || undefined,
+          count: 500,
+        });
 
-  while (hasMore) {
-    const response = await plaidClient.transactionsSync({
-      access_token: plaidItem.accessToken,
-      cursor: cursor || undefined,
-      count: 500,
-    });
+        const data = response.data;
+        allAdded.push(...data.added);
+        allModified.push(...data.modified);
+        allRemoved.push(...data.removed);
 
-    const data = response.data;
-    allAdded.push(...data.added);
-    allModified.push(...data.modified);
-    allRemoved.push(...data.removed);
-
-    hasMore = data.has_more;
-    cursor = data.next_cursor;
+        hasMore = data.has_more;
+        cursor = data.next_cursor;
+      }
+      break;
+    } catch (err) {
+      const shouldRetry =
+        getPlaidErrorCode(err) === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION' &&
+        attempt < MAX_SYNC_ATTEMPTS;
+      if (!shouldRetry) throw err;
+      cursor = plaidItem.cursor;
+      allAdded = [];
+      allModified = [];
+      allRemoved = [];
+    }
   }
 
-  for (const txn of allAdded) {
-    const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
-    const acct = accountMap.get(txn.account_id);
-    const flowType = getFlowType(txn, acct?.type ?? null);
-
-    await prisma.transaction.upsert({
-      where: { plaidTransactionId: txn.transaction_id },
-      update: {
-        date: new Date(txn.date),
-        name: txn.name,
-        merchantName: txn.merchant_name || null,
-        amount: txn.amount,
-        category,
-        subcategory,
-        accountId: acct?.id ?? null,
-        flowType,
-        pending: txn.pending,
-      },
-      create: {
-        plaidItemId: plaidItem.id,
-        plaidTransactionId: txn.transaction_id,
-        date: new Date(txn.date),
-        name: txn.name,
-        merchantName: txn.merchant_name || null,
-        amount: txn.amount,
-        category,
-        subcategory,
-        accountId: acct?.id ?? null,
-        flowType,
-        pending: txn.pending,
-      },
-    });
-  }
-
-  for (const txn of allModified) {
-    const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
-    const acct = accountMap.get(txn.account_id);
-    const flowType = getFlowType(txn, acct?.type ?? null);
-
-    await prisma.transaction.update({
-      where: { plaidTransactionId: txn.transaction_id },
-      data: {
-        date: new Date(txn.date),
-        name: txn.name,
-        merchantName: txn.merchant_name || null,
-        amount: txn.amount,
-        category,
-        subcategory,
-        accountId: acct?.id ?? null,
-        flowType,
-        pending: txn.pending,
-      },
-    });
+  // Plaid can report a transaction as modified that we never stored (e.g. a
+  // cursor race), so modified rows go through the same upsert as added rows.
+  for (const txn of [...allAdded, ...allModified]) {
+    await upsertTransaction(txn, plaidItem.id, accountMap);
   }
 
   for (const removed of allRemoved) {
     if (removed.transaction_id) {
-      await prisma.transaction
-        .delete({ where: { plaidTransactionId: removed.transaction_id } })
-        .catch(() => {});
+      await prisma.transaction.deleteMany({
+        where: { plaidTransactionId: removed.transaction_id },
+      });
     }
   }
 
-  await prisma.plaidItem.update({
-    where: { id: plaidItem.id },
+  // Optimistic write: only advance the cursor if no concurrent sync (webhook
+  // vs. manual) advanced it first. Losing the race is safe to skip — both
+  // syncs started from the same cursor and all writes above are idempotent,
+  // so the next sync simply re-fetches a suffix of already-applied deltas.
+  await prisma.plaidItem.updateMany({
+    where: { id: plaidItem.id, cursor: plaidItem.cursor },
     data: { cursor },
   });
 
