@@ -13,7 +13,6 @@ export async function GET() {
         id: true,
         email: true,
         name: true,
-        mfaEnabled: true,
         createdAt: true,
       },
     });
@@ -35,16 +34,12 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, mfaEnabled } = body;
+    const { name } = body;
 
-    const updateData: { name?: string | null; mfaEnabled?: boolean } = {};
+    const updateData: { name?: string | null } = {};
 
     if (typeof name === 'string') {
       updateData.name = name.trim() || null;
-    }
-
-    if (typeof mfaEnabled === 'boolean') {
-      updateData.mfaEnabled = mfaEnabled;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -58,7 +53,6 @@ export async function PATCH(request: NextRequest) {
         id: true,
         email: true,
         name: true,
-        mfaEnabled: true,
         createdAt: true,
       },
     });
