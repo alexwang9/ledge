@@ -1,6 +1,6 @@
 # Security Policy
 
-_Last reviewed: 2026-05-31_
+_Last reviewed: 2026-07-06_
 
 This document describes how Ledge protects user data and handles security incidents. It applies to the production deployment at <https://ledgeflux.com> and the codebase in this repository.
 
@@ -27,17 +27,23 @@ There are no shared credentials, no third-party contractors with production acce
 - Passwords are hashed with bcrypt (cost factor 10) before storage; the plaintext is never persisted or logged.
 - Email-based multi-factor authentication is required on every sign-in. A six-digit verification code is sent via Resend and must be entered within 10 minutes; codes are single-use and a fresh MFA verification is required for each session issuance.
 - Sessions are JWTs signed with `AUTH_SECRET` and issued by NextAuth. Rotating `AUTH_SECRET` immediately invalidates every active session.
-- Authentication endpoints are rate-limited at 5 requests per 60 seconds per IP via Upstash Redis.
+- Authentication endpoints are rate-limited per IP via Upstash Redis with scoped windows: login 5/60s, verification-code sends 3/60s, verification-code checks 10/60s. Code sends additionally have a 60-second per-user cooldown, and codes are consumed atomically (single-use even under concurrent requests).
 
 ## 4. Encryption
 
 - **In transit:** TLS 1.2+ is enforced by Vercel for all inbound HTTPS connections and by Supabase for all Postgres connections. Plaid, Resend, and Upstash communicate over TLS as well.
 - **At rest:** Supabase managed Postgres encrypts all data using AES-256. Disk-level encryption is provided by the underlying AWS infrastructure.
-- **Application-level:** Passwords are bcrypt-hashed before reaching the database (see §3).
+- **Application-level:** Passwords are bcrypt-hashed before reaching the database (see §3). Plaid access tokens are encrypted with AES-256-GCM (`src/lib/crypto.ts`) before storage, keyed by `ENCRYPTION_KEY` (32 bytes, base64; generate with `openssl rand -base64 32`). Tokens are decrypted only server-side at the point of use and are never sent to the browser. Existing plaintext rows are migrated with `prisma/encrypt-tokens.ts`.
 
 ## 5. Secrets Management
 
-All secrets — `AUTH_SECRET`, `DATABASE_URL`, `DIRECT_URL`, `PLAID_CLIENT_ID`, `PLAID_SECRET`, `RESEND_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` — are stored exclusively in Vercel's encrypted environment-variable store (Production scope) and, for local development, in a gitignored `.env` file. No secret is ever committed to source control; `.env` is enumerated in `.gitignore` and a placeholder `.env.example` is used for onboarding.
+All secrets — `AUTH_SECRET`, `DATABASE_URL`, `DIRECT_URL`, `PLAID_CLIENT_ID`, `PLAID_SECRET`, `RESEND_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `ENCRYPTION_KEY` — are stored exclusively in Vercel's encrypted environment-variable store (Production scope) and, for local development, in a gitignored `.env` file. No secret is committed to source control; `.env` is enumerated in `.gitignore` and a placeholder `.env.example` is used for onboarding.
+
+> **Known exposure (2026-07-06 audit):** an early `.env` containing `DATABASE_URL`, `PLAID_SECRET`, `AUTH_SECRET`, and `RESEND_API_KEY` was committed before `4b6c5dd` ("chore: stop tracking .env") and remains recoverable from git history on the remote. Those values must be treated as exposed and rotated:
+> 1. `AUTH_SECRET` — generate a new value (`openssl rand -base64 32`), update in Vercel; all sessions are invalidated.
+> 2. `PLAID_SECRET` — rotate via Plaid Dashboard → Team Settings → Keys.
+> 3. `DATABASE_URL` / `DIRECT_URL` — reset the database password in Supabase and update both URLs.
+> 4. `RESEND_API_KEY` — revoke and re-issue in the Resend dashboard.
 
 Secrets are rotated:
 - Immediately on any suspicion of exposure.
