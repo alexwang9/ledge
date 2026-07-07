@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import prisma from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/ratelimit';
 
 export async function POST(request: NextRequest) {
+  const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
+  const { limited } = await checkRateLimit(ip, 'code-verify');
+  if (limited) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { email, code } = body;
 
-    if (!email || !code) {
+    if (!email || !code || typeof email !== 'string' || typeof code !== 'string') {
       return NextResponse.json(
         { error: 'Email and code are required' },
         { status: 400 }
@@ -32,34 +40,35 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Find valid verification code
-    const verificationCode = await prisma.verificationCode.findFirst({
-      where: {
-        userId: user.id,
-        code,
-        used: false,
-        expiresAt: { gt: new Date() },
-      },
+    // Atomically consume the code: updateMany's used:false predicate is
+    // re-evaluated under the row lock, so concurrent requests with the same
+    // code can't both succeed (which would also double-copy the default
+    // categories below).
+    const verified = await prisma.$transaction(async (tx) => {
+      const consumed = await tx.verificationCode.updateMany({
+        where: {
+          userId: user.id,
+          code,
+          used: false,
+          expiresAt: { gt: new Date() },
+        },
+        data: { used: true },
+      });
+      if (consumed.count === 0) return false;
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+      return true;
     });
 
-    if (!verificationCode) {
+    if (!verified) {
       return NextResponse.json(
         { error: 'Invalid or expired verification code' },
         { status: 401 }
       );
     }
-
-    // Mark code as used and verify email
-    await prisma.$transaction([
-      prisma.verificationCode.update({
-        where: { id: verificationCode.id },
-        data: { used: true },
-      }),
-      prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerified: true },
-      }),
-    ]);
 
     // Copy default budget categories to the new user
     const defaultUser = await prisma.user.findUnique({

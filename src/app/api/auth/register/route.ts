@@ -55,8 +55,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      // If user exists but isn't verified, allow re-registration
-      if (!existingUser.emailVerified) {
+      // If user exists but isn't verified, allow re-registration.
+      // Password-less accounts (e.g. the system user that owns the default
+      // budget categories) are never deletable this way — re-registering
+      // one would cascade-delete its data and hand the email to the caller.
+      if (!existingUser.emailVerified && existingUser.password) {
         // Delete the unverified user and their verification codes
         await prisma.verificationCode.deleteMany({
           where: { userId: existingUser.id },

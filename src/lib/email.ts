@@ -44,5 +44,6 @@ export async function sendVerificationCode(email: string, code: string): Promise
 }
 
 export function generateVerificationCode(): string {
-  return randomInt(100000, 999999).toString();
+  // Upper bound is exclusive: this yields the full 100000–999999 range.
+  return randomInt(100000, 1000000).toString();
 }
