@@ -4,6 +4,7 @@ import { plaidClient } from '@/lib/plaid';
 import prisma from '@/lib/prisma';
 import { mapPlaidCategory } from '@/lib/category-mapping';
 import { classifyFlow, mapAccountType } from '@/lib/flow-type';
+import { decryptToken } from '@/lib/crypto';
 
 type PlaidItemRecord = {
   id: string;
@@ -74,7 +75,11 @@ function getFlowType(
   );
 }
 
-export async function syncTransactionsForItem(plaidItem: PlaidItemRecord) {
+export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
+  // Decrypt here (rather than in callers) so both the sync route and the
+  // webhook handler get it for free.
+  const plaidItem = { ...rawItem, accessToken: decryptToken(rawItem.accessToken) };
+
   const accountMap = await upsertAccountsForItem(plaidItem);
 
   let cursor = plaidItem.cursor;

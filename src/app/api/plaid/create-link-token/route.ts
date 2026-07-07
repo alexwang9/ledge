@@ -3,6 +3,7 @@ import { CountryCode, Products } from 'plaid';
 import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { decryptToken } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth();
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       if (!item) {
         return NextResponse.json({ error: 'Item not found' }, { status: 404 });
       }
-      accessToken = item.accessToken;
+      accessToken = decryptToken(item.accessToken);
     }
 
     const baseParams = {

@@ -3,6 +3,7 @@ import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { mapAccountType } from '@/lib/flow-type';
+import { encryptToken } from '@/lib/crypto';
 
 export async function POST(request: Request) {
   const auth = await requireAuth();
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     const plaidItem = await prisma.plaidItem.create({
       data: {
         userId: auth.userId,
-        accessToken,
+        accessToken: encryptToken(accessToken),
         plaidItemId: itemId,
         institutionId,
         institutionName,

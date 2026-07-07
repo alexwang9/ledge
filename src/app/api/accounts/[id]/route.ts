@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { decryptToken } from '@/lib/crypto';
 
 export async function DELETE(
   request: NextRequest,
@@ -28,7 +29,7 @@ export async function DELETE(
     // Remove the item from Plaid (optional but good practice)
     try {
       await plaidClient.itemRemove({
-        access_token: plaidItem.accessToken,
+        access_token: decryptToken(plaidItem.accessToken),
       });
     } catch (error) {
       // Log but don't fail if Plaid removal fails

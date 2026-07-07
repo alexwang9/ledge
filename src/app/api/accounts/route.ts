@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { plaidClient } from '@/lib/plaid';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { decryptToken } from '@/lib/crypto';
 
 export async function GET() {
   const auth = await requireAuth();
@@ -23,7 +24,7 @@ export async function GET() {
       plaidItems.map(async (item) => {
         try {
           const response = await plaidClient.accountsBalanceGet({
-            access_token: item.accessToken,
+            access_token: decryptToken(item.accessToken),
           });
 
           const accounts = response.data.accounts.map((account) => ({
