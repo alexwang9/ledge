@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { clampMonthYear } from '@/lib/validation';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth();
@@ -12,8 +13,11 @@ export async function GET(request: NextRequest) {
     // Get month/year from query params, default to current month
     const searchParams = request.nextUrl.searchParams;
     const now = new Date();
-    const month = parseInt(searchParams.get('month') || String(now.getMonth()));
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()));
+    const { month, year } = clampMonthYear(
+      searchParams.get('month'),
+      searchParams.get('year'),
+      now
+    );
 
     // Get all budget categories for the user
     const categories = await prisma.budgetCategory.findMany({

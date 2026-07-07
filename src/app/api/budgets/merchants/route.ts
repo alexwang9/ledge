@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { clampMonthYear } from '@/lib/validation';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth();
@@ -12,8 +13,11 @@ export async function GET(request: NextRequest) {
     // Get month/year from query params, default to current month
     const searchParams = request.nextUrl.searchParams;
     const now = new Date();
-    const month = parseInt(searchParams.get('month') || String(now.getMonth()));
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()));
+    const { month, year } = clampMonthYear(
+      searchParams.get('month'),
+      searchParams.get('year'),
+      now
+    );
 
     // Get selected month's date range
     const startOfMonth = new Date(year, month, 1);
@@ -98,11 +102,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { merchantName, monthlyLimit } = body;
 
-    if (!merchantName || typeof merchantName !== 'string') {
+    if (!merchantName || typeof merchantName !== 'string' || merchantName.length > 200) {
       return NextResponse.json({ error: 'Merchant name is required' }, { status: 400 });
     }
 
-    if (typeof monthlyLimit !== 'number' || monthlyLimit < 0) {
+    if (typeof monthlyLimit !== 'number' || !Number.isFinite(monthlyLimit) || monthlyLimit < 0) {
       return NextResponse.json({ error: 'Valid monthly limit is required' }, { status: 400 });
     }
 

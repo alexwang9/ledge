@@ -24,6 +24,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid flowType' }, { status: 400 });
     }
 
+    if (
+      category !== undefined &&
+      category !== null &&
+      (typeof category !== 'string' || category.length > 200)
+    ) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+    }
+
     // Get the transaction and verify ownership
     const transaction = await prisma.transaction.findUnique({
       where: { id },

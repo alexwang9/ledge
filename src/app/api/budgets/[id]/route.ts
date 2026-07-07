@@ -16,6 +16,18 @@ export async function PATCH(
     const body = await request.json();
     const { monthlyLimit } = body;
 
+    // null clears the budget; a number must be a non-negative finite value
+    // (typeof NaN === 'number', so isFinite is required)
+    if (
+      monthlyLimit !== null &&
+      (typeof monthlyLimit !== 'number' || !Number.isFinite(monthlyLimit) || monthlyLimit < 0)
+    ) {
+      return NextResponse.json(
+        { error: 'Monthly limit must be a non-negative number or null' },
+        { status: 400 }
+      );
+    }
+
     // Verify the category belongs to the user
     const category = await prisma.budgetCategory.findFirst({
       where: { id, userId: authResult.userId },
@@ -28,7 +40,7 @@ export async function PATCH(
     // Update the budget limit (allow 0 as a valid value)
     const updated = await prisma.budgetCategory.update({
       where: { id },
-      data: { monthlyLimit: typeof monthlyLimit === 'number' ? monthlyLimit : null },
+      data: { monthlyLimit },
     });
 
     return NextResponse.json({ success: true, category: updated });

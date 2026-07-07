@@ -16,7 +16,7 @@ export async function PATCH(
     const body = await request.json();
     const { monthlyLimit } = body;
 
-    if (typeof monthlyLimit !== 'number' || monthlyLimit < 0) {
+    if (typeof monthlyLimit !== 'number' || !Number.isFinite(monthlyLimit) || monthlyLimit < 0) {
       return NextResponse.json({ error: 'Valid monthly limit is required' }, { status: 400 });
     }
 

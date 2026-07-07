@@ -38,10 +38,16 @@ export async function GET(request: NextRequest) {
     plaidItemId: { in: plaidItemIds },
   };
 
-  if (startDate || endDate) {
+  // Ignore unparseable dates rather than filtering on Invalid Date
+  const parsedStart = startDate ? new Date(startDate) : null;
+  const parsedEnd = endDate ? new Date(endDate) : null;
+  const validStart = parsedStart && !isNaN(parsedStart.getTime()) ? parsedStart : null;
+  const validEnd = parsedEnd && !isNaN(parsedEnd.getTime()) ? parsedEnd : null;
+
+  if (validStart || validEnd) {
     where.date = {};
-    if (startDate) where.date.gte = new Date(startDate);
-    if (endDate) where.date.lte = new Date(endDate);
+    if (validStart) where.date.gte = validStart;
+    if (validEnd) where.date.lte = validEnd;
   }
 
   if (categories && categories.length > 0) {

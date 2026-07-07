@@ -39,6 +39,9 @@ export async function PATCH(request: NextRequest) {
     const updateData: { name?: string | null } = {};
 
     if (typeof name === 'string') {
+      if (name.length > 200) {
+        return NextResponse.json({ error: 'Name is too long' }, { status: 400 });
+      }
       updateData.name = name.trim() || null;
     }
 

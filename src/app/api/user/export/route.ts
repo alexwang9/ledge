@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { escapeCsvField } from '@/lib/csv';
 
 export async function GET() {
   const auth = await requireAuth();
@@ -60,11 +61,4 @@ export async function GET() {
     console.error('Failed to export transactions:', error);
     return NextResponse.json({ error: 'Failed to export transactions' }, { status: 500 });
   }
-}
-
-function escapeCsvField(field: string): string {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-    return `"${field.replace(/"/g, '""')}"`;
-  }
-  return field;
 }
