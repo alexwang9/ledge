@@ -83,6 +83,78 @@ export function getPlaidErrorCode(err: unknown): string | null {
   return typeof data?.error_code === 'string' ? data.error_code : null;
 }
 
+/**
+ * Plaid error/webhook codes that require the user to re-authenticate via
+ * Plaid Link in update mode. Transient codes (INSTITUTION_DOWN, RATE_LIMIT,
+ * etc.) are deliberately excluded — those resolve on their own.
+ */
+export const RELINK_ERROR_CODES: ReadonlySet<string> = new Set([
+  'ITEM_LOGIN_REQUIRED',
+  'PENDING_EXPIRATION',
+  'PENDING_DISCONNECT',
+  'ACCESS_NOT_GRANTED',
+  'USER_SETUP_REQUIRED',
+]);
+
+export function isRelinkRequiredError(code: string | null | undefined): boolean {
+  return code != null && RELINK_ERROR_CODES.has(code);
+}
+
+/**
+ * Flags an item as needing re-authentication. Accepts either our DB id
+ * (sync/cron routes) or Plaid's item_id (webhook handler).
+ */
+export async function markItemNeedsRelink(
+  where: { id: string } | { plaidItemId: string },
+  errorCode: string
+): Promise<void> {
+  await prisma.plaidItem.updateMany({
+    where,
+    data: { needsRelink: true, relinkError: errorCode },
+  });
+}
+
+type SyncableItem = PlaidItemRecord & { institutionName: string };
+
+export type SyncBatchResult = {
+  added: number;
+  modified: number;
+  removed: number;
+  itemErrors: { plaidItemId: string; institutionName: string; error: string }[];
+};
+
+/**
+ * Syncs a batch of items with per-item error isolation: one failing
+ * institution never blocks the others. Relink-requiring Plaid errors flag
+ * the item for reconnection; all failures are reported by error code only
+ * (never raw error messages, which may leak internals).
+ */
+export async function syncItemsWithIsolation(items: SyncableItem[]): Promise<SyncBatchResult> {
+  const result: SyncBatchResult = { added: 0, modified: 0, removed: 0, itemErrors: [] };
+
+  for (const item of items) {
+    try {
+      const counts = await syncTransactionsForItem(item);
+      result.added += counts.added;
+      result.modified += counts.modified;
+      result.removed += counts.removed;
+    } catch (err) {
+      console.error(`Sync failed for ${item.institutionName}:`, err);
+      const code = getPlaidErrorCode(err);
+      if (isRelinkRequiredError(code)) {
+        await markItemNeedsRelink({ id: item.id }, code as string);
+      }
+      result.itemErrors.push({
+        plaidItemId: item.id,
+        institutionName: item.institutionName,
+        error: code ?? 'Sync failed',
+      });
+    }
+  }
+
+  return result;
+}
+
 async function upsertTransaction(
   txn: PlaidTransaction,
   plaidItemId: string,
@@ -183,7 +255,7 @@ export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
   // so the next sync simply re-fetches a suffix of already-applied deltas.
   await prisma.plaidItem.updateMany({
     where: { id: plaidItem.id, cursor: plaidItem.cursor },
-    data: { cursor },
+    data: { cursor, lastSyncedAt: new Date() },
   });
 
   return {

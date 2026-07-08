@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { getPlaidErrorCode, syncTransactionsForItem } from '@/lib/plaid-sync';
+import { syncItemsWithIsolation } from '@/lib/plaid-sync';
 
 export async function POST() {
   const auth = await requireAuth();
@@ -22,38 +22,13 @@ export async function POST() {
       });
     }
 
-    let totalAdded = 0;
-    let totalModified = 0;
-    let totalRemoved = 0;
-    const itemErrors: { institutionName: string; error: string }[] = [];
-
-    // One failing institution must not block the others from syncing.
-    for (const plaidItem of plaidItems) {
-      try {
-        const result = await syncTransactionsForItem(plaidItem);
-        totalAdded += result.added;
-        totalModified += result.modified;
-        totalRemoved += result.removed;
-      } catch (err) {
-        console.error(`Sync failed for ${plaidItem.institutionName}:`, err);
-        if (getPlaidErrorCode(err) === 'ITEM_LOGIN_REQUIRED') {
-          await prisma.plaidItem.update({
-            where: { id: plaidItem.id },
-            data: { needsRelink: true, relinkError: 'ITEM_LOGIN_REQUIRED' },
-          });
-        }
-        itemErrors.push({
-          institutionName: plaidItem.institutionName,
-          error: 'Sync failed',
-        });
-      }
-    }
+    const { added, modified, removed, itemErrors } = await syncItemsWithIsolation(plaidItems);
 
     return NextResponse.json({
       success: itemErrors.length === 0,
-      added: totalAdded,
-      modified: totalModified,
-      removed: totalRemoved,
+      added,
+      modified,
+      removed,
       itemErrors,
     });
   } catch (error) {

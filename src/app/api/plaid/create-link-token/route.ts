@@ -38,6 +38,12 @@ export async function POST(request: NextRequest) {
       ...(process.env.PLAID_REDIRECT_URI
         ? { redirect_uri: process.env.PLAID_REDIRECT_URI }
         : {}),
+      // Register our webhook endpoint on newly linked items so Plaid pushes
+      // SYNC_UPDATES_AVAILABLE etc. (Update-mode tokens ignore this field;
+      // existing items are covered by prisma/register-webhooks.ts.)
+      ...(process.env.PLAID_WEBHOOK_URL
+        ? { webhook: process.env.PLAID_WEBHOOK_URL }
+        : {}),
     };
 
     // Update mode: pass access_token instead of products

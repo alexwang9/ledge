@@ -3,7 +3,11 @@ import { importJWK, jwtVerify } from 'jose';
 import { createHash, timingSafeEqual } from 'crypto';
 import { plaidClient } from '@/lib/plaid';
 import prisma from '@/lib/prisma';
-import { syncTransactionsForItem } from '@/lib/plaid-sync';
+import {
+  isRelinkRequiredError,
+  markItemNeedsRelink,
+  syncTransactionsForItem,
+} from '@/lib/plaid-sync';
 
 async function verifyPlaidWebhook(rawBody: string, signedJwt: string): Promise<boolean> {
   try {
@@ -40,11 +44,8 @@ async function handleSyncUpdatesAvailable(plaidItemId: string) {
 }
 
 async function handleItemError(plaidItemId: string, errorCode: string) {
-  if (errorCode !== 'ITEM_LOGIN_REQUIRED') return;
-  await prisma.plaidItem.updateMany({
-    where: { plaidItemId },
-    data: { needsRelink: true, relinkError: errorCode },
-  });
+  if (!isRelinkRequiredError(errorCode)) return;
+  await markItemNeedsRelink({ plaidItemId }, errorCode);
 }
 
 async function handleLoginRepaired(plaidItemId: string) {
@@ -75,6 +76,14 @@ export async function POST(request: NextRequest) {
       await handleSyncUpdatesAvailable(item_id);
     } else if (webhook_type === 'ITEM' && webhook_code === 'ERROR') {
       await handleItemError(item_id, error?.error_code ?? '');
+    } else if (
+      webhook_type === 'ITEM' &&
+      (webhook_code === 'PENDING_EXPIRATION' || webhook_code === 'PENDING_DISCONNECT')
+    ) {
+      // Plaid delivers these as standalone webhook codes (not ITEM/ERROR):
+      // consent is about to expire / the institution connection is winding
+      // down, so prompt the user to relink proactively.
+      await markItemNeedsRelink({ plaidItemId: item_id }, webhook_code);
     } else if (webhook_type === 'ITEM' && webhook_code === 'LOGIN_REPAIRED') {
       await handleLoginRepaired(item_id);
     }
