@@ -20,9 +20,15 @@
 import { PrismaClient } from '@prisma/client';
 import { plaidClient } from '../src/lib/plaid';
 import { decryptToken } from '../src/lib/crypto';
-import { getPlaidErrorCode } from '../src/lib/plaid-sync';
 
 const prisma = new PrismaClient();
+
+// Inlined from src/lib/plaid-sync.ts: that module imports via the `@/` path
+// alias, which ts-node can't resolve outside the Next.js build.
+function getPlaidErrorCode(err: unknown): string | null {
+  const data = (err as { response?: { data?: { error_code?: unknown } } })?.response?.data;
+  return typeof data?.error_code === 'string' ? data.error_code : null;
+}
 
 async function main() {
   const webhookUrl = process.env.PLAID_WEBHOOK_URL;
