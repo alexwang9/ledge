@@ -5,7 +5,8 @@ import { syncItemsWithIsolation } from '@/lib/plaid-sync';
 
 export const dynamic = 'force-dynamic';
 // Sequential syncs across all users can exceed the default function timeout.
-export const maxDuration = 300;
+// 60s is the Vercel Hobby-plan ceiling; raise if the project moves to Pro.
+export const maxDuration = 60;
 
 // Hash both sides to fixed length so timingSafeEqual never throws on length
 // mismatch (which would itself leak length information).
