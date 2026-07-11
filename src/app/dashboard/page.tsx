@@ -152,6 +152,7 @@ export default function BudgetPage() {
             categories={categories}
             actualsByCategory={actualsByCategory}
             view={view}
+            year={year}
             onCategoryClick={setDrilldownCategory}
             onBudgetSave={handleBudgetSave}
           />

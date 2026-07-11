@@ -16,7 +16,7 @@ import {
   MONTHS_PER_YEAR,
   type BudgetCategoryView,
 } from '@/lib/budget-math';
-import { BudgetSection, columnCount } from './budget-section';
+import { BudgetSection, columnCount, CURRENT_MONTH_HIGHLIGHT } from './budget-section';
 import type { BudgetView } from './month-year-picker';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +26,7 @@ interface BudgetTableProps {
   categories: BudgetCategoryView[];
   actualsByCategory: Record<string, number[]>;
   view: BudgetView;
+  year: number;
   onCategoryClick: (category: BudgetCategoryView) => void;
   onBudgetSave: (categoryId: string, monthlyLimit: number | null) => Promise<void>;
 }
@@ -34,9 +35,12 @@ export function BudgetTable({
   categories,
   actualsByCategory,
   view,
+  year,
   onCategoryClick,
   onBudgetSave,
 }: BudgetTableProps) {
+  const now = new Date();
+  const highlightMonth = view === 'annual' && year === now.getFullYear() ? now.getMonth() : null;
   const income = sectionTotals(categories, actualsByCategory, 'INCOME');
   const expenses = sectionTotals(categories, actualsByCategory, 'EXPENSE');
   const savings = sectionTotals(categories, actualsByCategory, 'SAVINGS_TRANSFER');
@@ -48,20 +52,21 @@ export function BudgetTable({
     </TableHead>
   );
 
-  const netMonthCell = (amount: number, key: number | string, bold = false) => (
+  const netMonthCell = (amount: number, key: number | string, bold = false, extra = '') => (
     <TableCell
       key={key}
       className={cn(
         'text-right tabular-nums font-medium',
         amount >= 0 ? 'text-emerald-400' : 'text-rose-400',
-        bold && 'font-semibold'
+        bold && 'font-semibold',
+        extra
       )}
     >
       {amount !== 0 ? formatCurrency(amount) : <span className="text-white/20">–</span>}
     </TableCell>
   );
 
-  const sectionProps = { actualsByCategory, view, onCategoryClick, onBudgetSave };
+  const sectionProps = { actualsByCategory, view, highlightMonth, onCategoryClick, onBudgetSave };
 
   return (
     <div className="overflow-x-auto scrollbar-hide">
@@ -74,7 +79,12 @@ export function BudgetTable({
             {view === 'annual' ? (
               <>
                 {headCell('Monthly Budget', 'min-w-[110px]')}
-                {MONTHS.map((month) => headCell(month))}
+                {MONTHS.map((month, m) =>
+                  headCell(
+                    month,
+                    m === highlightMonth ? cn(CURRENT_MONTH_HIGHLIGHT, 'text-white/70') : ''
+                  )
+                )}
                 {headCell('Annual Actual', 'bg-white/[0.02] min-w-[110px]')}
                 {headCell('Annual Budget', 'bg-white/[0.02] min-w-[110px]')}
                 {headCell('Δ', 'min-w-[100px]')}
@@ -119,7 +129,9 @@ export function BudgetTable({
             {view === 'annual' ? (
               <>
                 {netMonthCell(net.monthlyBudget, 'budget')}
-                {net.monthlyActuals.map((amount, m) => netMonthCell(amount, m))}
+                {net.monthlyActuals.map((amount, m) =>
+                  netMonthCell(amount, m, false, m === highlightMonth ? CURRENT_MONTH_HIGHLIGHT : '')
+                )}
                 {netMonthCell(net.annualActual, 'annual', true)}
                 {netMonthCell(net.annualBudget, 'annualBudget')}
                 <TableCell

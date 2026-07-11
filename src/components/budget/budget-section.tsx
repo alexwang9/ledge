@@ -14,6 +14,9 @@ import {
 import type { BudgetView } from './month-year-picker';
 import { cn } from '@/lib/utils';
 
+// Class applied to every cell in the current month's column (annual view only).
+export const CURRENT_MONTH_HIGHLIGHT = 'bg-white/[0.05]';
+
 export type SectionTint = 'emerald' | 'rose' | 'sky';
 
 // Static class strings so Tailwind can see them at build time.
@@ -154,6 +157,8 @@ interface BudgetSectionProps {
   totals: SectionTotals;
   view: BudgetView;
   tint: SectionTint;
+  /** Month index (0–11) whose column is highlighted as the current month, or null. */
+  highlightMonth: number | null;
   onCategoryClick: (category: BudgetCategoryView) => void;
   onBudgetSave: (categoryId: string, monthlyLimit: number | null) => Promise<void>;
 }
@@ -165,6 +170,7 @@ export function BudgetSection({
   totals,
   view,
   tint,
+  highlightMonth,
   onCategoryClick,
   onBudgetSave,
 }: BudgetSectionProps) {
@@ -218,7 +224,11 @@ export function BudgetSection({
                   onSave={(v) => onBudgetSave(category.id, v)}
                 />
                 {Array.from({ length: MONTHS_PER_YEAR }, (_, m) =>
-                  monthCell(actuals[m] ?? 0, m)
+                  monthCell(
+                    actuals[m] ?? 0,
+                    m,
+                    cn('text-white/60', m === highlightMonth && CURRENT_MONTH_HIGHLIGHT)
+                  )
                 )}
                 {monthCell(annualActual, 'annual', cn('font-medium bg-white/[0.02]', tintClasses.text))}
                 <TableCell className="text-right tabular-nums text-white/50 bg-white/[0.02]">
@@ -263,7 +273,11 @@ export function BudgetSection({
               {formatCurrency(totals.monthlyBudget)}
             </TableCell>
             {totals.monthlyActuals.map((amount, m) =>
-              monthCell(amount, m, cn('font-medium', tintClasses.text))
+              monthCell(
+                amount,
+                m,
+                cn('font-medium', tintClasses.text, m === highlightMonth && CURRENT_MONTH_HIGHLIGHT)
+              )
             )}
             {monthCell(totals.annualActual, 'annual', cn('font-semibold', tintClasses.text))}
             <TableCell className={cn('text-right tabular-nums font-medium', tintClasses.text)}>
