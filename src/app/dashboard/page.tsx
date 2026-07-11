@@ -155,6 +155,7 @@ export default function BudgetPage() {
             year={year}
             onCategoryClick={setDrilldownCategory}
             onBudgetSave={handleBudgetSave}
+            onMonthClick={setView}
           />
         </CardContent>
       </Card>

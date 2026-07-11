@@ -29,6 +29,7 @@ interface BudgetTableProps {
   year: number;
   onCategoryClick: (category: BudgetCategoryView) => void;
   onBudgetSave: (categoryId: string, monthlyLimit: number | null) => Promise<void>;
+  onMonthClick?: (month: number) => void;
 }
 
 export function BudgetTable({
@@ -38,6 +39,7 @@ export function BudgetTable({
   year,
   onCategoryClick,
   onBudgetSave,
+  onMonthClick,
 }: BudgetTableProps) {
   const now = new Date();
   const highlightMonth = view === 'annual' && year === now.getFullYear() ? now.getMonth() : null;
@@ -49,6 +51,19 @@ export function BudgetTable({
   const headCell = (label: string, extra = '') => (
     <TableHead key={label} className={cn('text-white/40 text-right min-w-[92px]', extra)}>
       {label}
+    </TableHead>
+  );
+
+  const monthHeadCell = (label: string, month: number, extra = '') => (
+    <TableHead key={label} className={cn('text-white/40 text-right min-w-[92px] p-0', extra)}>
+      <button
+        type="button"
+        onClick={() => onMonthClick?.(month)}
+        className="w-full h-full px-4 text-right cursor-pointer hover:text-white transition-colors"
+        title={`View ${label} ${year}`}
+      >
+        {label}
+      </button>
     </TableHead>
   );
 
@@ -80,8 +95,9 @@ export function BudgetTable({
               <>
                 {headCell('Monthly Budget', 'min-w-[110px]')}
                 {MONTHS.map((month, m) =>
-                  headCell(
+                  monthHeadCell(
                     month,
+                    m,
                     m === highlightMonth ? cn(CURRENT_MONTH_HIGHLIGHT, 'text-white/70') : ''
                   )
                 )}
