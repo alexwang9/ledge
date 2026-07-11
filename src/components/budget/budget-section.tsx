@@ -17,8 +17,9 @@ import { cn } from '@/lib/utils';
 export type SectionTint = 'emerald' | 'rose' | 'sky';
 
 // Static class strings so Tailwind can see them at build time.
-// `*Solid` variants are the opaque equivalents of the translucent tints
-// composited over the table's #0a0a0a base, used on sticky left cells so
+// `*Solid` variants are the opaque equivalents of the translucent tints,
+// composited over the table's actual backdrop — the card's bg-white/[0.03]
+// over the page's #0a0a0a, i.e. ~#111111. Used on sticky left cells so
 // horizontally-scrolled content never shows through them.
 const TINTS: Record<
   SectionTint,
@@ -26,23 +27,23 @@ const TINTS: Record<
 > = {
   emerald: {
     header: 'bg-emerald-500/[0.05]',
-    headerSolid: 'bg-[#0a1310]',
+    headerSolid: 'bg-[#111a17]',
     subtotal: 'bg-emerald-500/[0.08]',
-    subtotalSolid: 'bg-[#0a1814]',
+    subtotalSolid: 'bg-[#111f1a]',
     text: 'text-emerald-400',
   },
   rose: {
     header: 'bg-rose-500/[0.05]',
-    headerSolid: 'bg-[#160d0e]',
+    headerSolid: 'bg-[#1d1415]',
     subtotal: 'bg-rose-500/[0.08]',
-    subtotalSolid: 'bg-[#1d0e11]',
+    subtotalSolid: 'bg-[#231517]',
     text: 'text-rose-400',
   },
   sky: {
     header: 'bg-sky-500/[0.05]',
-    headerSolid: 'bg-[#0a1215]',
+    headerSolid: 'bg-[#11191c]',
     subtotal: 'bg-sky-500/[0.08]',
-    subtotalSolid: 'bg-[#0a161c]',
+    subtotalSolid: 'bg-[#111d23]',
     text: 'text-sky-400',
   },
 };
@@ -178,18 +179,18 @@ export function BudgetSection({
 
   return (
     <>
-      {/* Section header — label sticks to the left while scrolling horizontally */}
+      {/* Section header — first cell is sticky like the rest of the left column */}
       <TableRow className={cn('border-white/[0.06]', tintClasses.header)}>
-        <TableCell colSpan={columnCount(view)} className={cn('p-0', tintClasses.text)}>
-          <div
-            className={cn(
-              'sticky left-0 inline-block px-4 py-2 font-medium uppercase text-xs tracking-wider',
-              tintClasses.headerSolid
-            )}
-          >
-            {title}
-          </div>
+        <TableCell
+          className={cn(
+            'sticky left-0 font-medium uppercase text-xs tracking-wider whitespace-nowrap',
+            tintClasses.headerSolid,
+            tintClasses.text
+          )}
+        >
+          {title}
         </TableCell>
+        <TableCell colSpan={columnCount(view) - 1} />
       </TableRow>
 
       {/* Category rows */}
@@ -201,7 +202,7 @@ export function BudgetSection({
             key={category.id}
             className="border-white/[0.06] hover:bg-white/[0.02] transition-colors"
           >
-            <TableCell className="sticky left-0 bg-[#0a0a0a] p-0">
+            <TableCell className="sticky left-0 bg-[#111111] p-0">
               <button
                 onClick={() => onCategoryClick(category)}
                 className="w-full text-left px-4 py-2 text-white/70 hover:text-white hover:underline decoration-white/30 underline-offset-2 transition-colors"
