@@ -5,12 +5,49 @@ import prisma from '@/lib/prisma';
 import { mapPlaidCategory } from '@/lib/category-mapping';
 import { classifyFlow, mapAccountType } from '@/lib/flow-type';
 import { decryptToken } from '@/lib/crypto';
+import {
+  resolveCategory,
+  categoryKey,
+  type RuleEntry,
+  type CategoryEntry,
+} from '@/lib/category-resolution';
 
 type PlaidItemRecord = {
   id: string;
+  userId: string;
   accessToken: string;
   cursor: string | null;
 };
+
+type UserCategorization = {
+  rulesByMerchant: Map<string, RuleEntry>;
+  categoriesByKey: Map<string, CategoryEntry>;
+};
+
+async function loadUserCategorization(userId: string): Promise<UserCategorization> {
+  const [rules, categories] = await Promise.all([
+    prisma.categoryRule.findMany({
+      where: { userId },
+      select: { merchantName: true, budgetCategoryId: true, ignore: true },
+    }),
+    prisma.budgetCategory.findMany({
+      where: { userId },
+      select: { id: true, name: true, type: true },
+    }),
+  ]);
+
+  return {
+    rulesByMerchant: new Map(
+      rules.map((r) => [
+        r.merchantName,
+        { budgetCategoryId: r.budgetCategoryId, ignore: r.ignore },
+      ])
+    ),
+    categoriesByKey: new Map(
+      categories.map((c) => [categoryKey(c.type, c.name), { id: c.id, type: c.type }])
+    ),
+  };
+}
 
 type AccountInfo = {
   id: string;
@@ -158,13 +195,14 @@ export async function syncItemsWithIsolation(items: SyncableItem[]): Promise<Syn
 async function upsertTransaction(
   txn: PlaidTransaction,
   plaidItemId: string,
-  accountMap: Map<string, AccountInfo>
+  accountMap: Map<string, AccountInfo>,
+  categorization: UserCategorization
 ): Promise<void> {
   const { category, subcategory } = mapPlaidCategory(buildCategoryArray(txn));
   const acct = accountMap.get(txn.account_id);
   const flowType = getFlowType(txn, acct?.type ?? null);
 
-  const fields = {
+  const plaidFields = {
     date: new Date(txn.date),
     name: txn.name,
     merchantName: txn.merchant_name || null,
@@ -174,6 +212,38 @@ async function upsertTransaction(
     accountId: acct?.id ?? null,
     flowType,
     pending: txn.pending,
+  };
+
+  // Manual assignments are never clobbered: USER rows only get Plaid-field
+  // refreshes. AUTO/RULE rows are re-resolved on every sync (Plaid "modified"
+  // events can change merchant/category data).
+  const existing = await prisma.transaction.findUnique({
+    where: { plaidTransactionId: txn.transaction_id },
+    select: { categorySource: true },
+  });
+
+  if (existing?.categorySource === 'USER') {
+    await prisma.transaction.update({
+      where: { plaidTransactionId: txn.transaction_id },
+      data: plaidFields,
+    });
+    return;
+  }
+
+  const resolved = resolveCategory({
+    merchantName: plaidFields.merchantName,
+    name: txn.name,
+    plaidMappedName: category,
+    flowType,
+    rulesByMerchant: categorization.rulesByMerchant,
+    categoriesByKey: categorization.categoriesByKey,
+  });
+
+  const fields = {
+    ...plaidFields,
+    budgetCategoryId: resolved.budgetCategoryId,
+    ignored: resolved.ignored,
+    categorySource: resolved.source,
   };
 
   await prisma.transaction.upsert({
@@ -195,6 +265,7 @@ export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
   const plaidItem = { ...rawItem, accessToken: decryptToken(rawItem.accessToken) };
 
   const accountMap = await upsertAccountsForItem(plaidItem);
+  const categorization = await loadUserCategorization(plaidItem.userId);
 
   // Fetch all pages before applying anything, so a mid-pagination failure
   // never leaves partial state, and a mutation-during-pagination restart is
@@ -238,7 +309,7 @@ export async function syncTransactionsForItem(rawItem: PlaidItemRecord) {
   // Plaid can report a transaction as modified that we never stored (e.g. a
   // cursor race), so modified rows go through the same upsert as added rows.
   for (const txn of [...allAdded, ...allModified]) {
-    await upsertTransaction(txn, plaidItem.id, accountMap);
+    await upsertTransaction(txn, plaidItem.id, accountMap, categorization);
   }
 
   for (const removed of allRemoved) {

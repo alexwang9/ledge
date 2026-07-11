@@ -15,8 +15,9 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { category, flowType } = body as {
-      category?: string | null;
+    const { budgetCategoryId, ignored, flowType } = body as {
+      budgetCategoryId?: string | null;
+      ignored?: boolean;
       flowType?: FlowType | null;
     };
 
@@ -25,11 +26,15 @@ export async function PATCH(
     }
 
     if (
-      category !== undefined &&
-      category !== null &&
-      (typeof category !== 'string' || category.length > 200)
+      budgetCategoryId !== undefined &&
+      budgetCategoryId !== null &&
+      typeof budgetCategoryId !== 'string'
     ) {
-      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid budgetCategoryId' }, { status: 400 });
+    }
+
+    if (ignored !== undefined && typeof ignored !== 'boolean') {
+      return NextResponse.json({ error: 'Invalid ignored flag' }, { status: 400 });
     }
 
     // Get the transaction and verify ownership
@@ -49,21 +54,43 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const data: { categoryOverride?: string | null; flowTypeOverride?: FlowType | null } = {};
-    if (category !== undefined) data.categoryOverride = category;
+    if (typeof budgetCategoryId === 'string') {
+      const category = await prisma.budgetCategory.findFirst({
+        where: { id: budgetCategoryId, userId: auth.userId },
+      });
+      if (!category) {
+        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+      }
+    }
+
+    const data: {
+      budgetCategoryId?: string | null;
+      ignored?: boolean;
+      categorySource?: 'USER';
+      flowTypeOverride?: FlowType | null;
+    } = {};
+    if (budgetCategoryId !== undefined) data.budgetCategoryId = budgetCategoryId;
+    if (ignored !== undefined) data.ignored = ignored;
+    // Any manual category/ignore change is pinned so sync never clobbers it.
+    if (budgetCategoryId !== undefined || ignored !== undefined) {
+      data.categorySource = 'USER';
+    }
     if (flowType !== undefined) data.flowTypeOverride = flowType;
 
     const updated = await prisma.transaction.update({
       where: { id },
       data,
+      include: { budgetCategory: { select: { name: true } } },
     });
 
     return NextResponse.json({
       success: true,
       transaction: {
         id: updated.id,
-        category: updated.categoryOverride || updated.category,
-        hasOverride: !!updated.categoryOverride,
+        budgetCategoryId: updated.budgetCategoryId,
+        categoryName: updated.budgetCategory?.name ?? null,
+        categorySource: updated.categorySource,
+        ignored: updated.ignored,
         flowType: updated.flowTypeOverride ?? updated.flowType,
         originalFlowType: updated.flowType,
         hasFlowOverride: !!updated.flowTypeOverride,

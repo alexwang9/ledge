@@ -7,7 +7,6 @@ import { useState } from 'react';
 import {
   LayoutDashboard,
   CreditCard,
-  PieChart,
   Building2,
   Settings,
   LogOut,
@@ -19,9 +18,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Budget', icon: LayoutDashboard },
   { href: '/dashboard/transactions', label: 'Transactions', icon: CreditCard },
-  { href: '/dashboard/budgets', label: 'Budgets', icon: PieChart },
   { href: '/dashboard/accounts', label: 'Accounts', icon: Building2 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/ratelimit';
+import { copyDefaultCategories } from '@/lib/default-categories';
 
 export async function POST(request: NextRequest) {
   const ip = (await headers()).get('x-forwarded-for') ?? 'unknown';
@@ -71,24 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Copy default budget categories to the new user
-    const defaultUser = await prisma.user.findUnique({
-      where: { email: 'system@default.local' },
-    });
-
-    if (defaultUser) {
-      const defaultCategories = await prisma.budgetCategory.findMany({
-        where: { userId: defaultUser.id },
-      });
-
-      await prisma.budgetCategory.createMany({
-        data: defaultCategories.map((cat) => ({
-          userId: user.id,
-          name: cat.name,
-          type: cat.type,
-          monthlyLimit: cat.monthlyLimit,
-        })),
-      });
-    }
+    await copyDefaultCategories(user.id);
 
     // Clean up old codes for this user
     await prisma.verificationCode.deleteMany({

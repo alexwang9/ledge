@@ -23,7 +23,7 @@ model User {
 
   plaidItems        PlaidItem[]
   budgetCategories  BudgetCategory[]
-  merchantBudgets   MerchantBudget[]
+  categoryRules     CategoryRule[]
   verificationCodes VerificationCode[]
 }
 
@@ -92,28 +92,40 @@ model Account {
   @@index([plaidItemId])
 }
 
+// How a transaction's budgetCategoryId was determined. USER assignments are
+// never overwritten by sync; AUTO/RULE rows are re-resolved on each sync.
+enum CategorySource {
+  AUTO
+  RULE
+  USER
+}
+
 model Transaction {
   id                 String    @id @default(cuid())
   plaidItemId        String
   plaidTransactionId String    @unique
   accountId          String?
+  budgetCategoryId   String?
+  categorySource     CategorySource @default(AUTO)
+  ignored            Boolean   @default(false)
   date               DateTime
   name               String
   merchantName       String?
   amount             Float
-  category           String?
+  category           String?   // Plaid-mapped name, kept for provenance/CSV export
   subcategory        String?
-  categoryOverride   String?   // User-assigned category that takes precedence over auto-mapped
   flowType           FlowType  @default(EXPENSE)
   flowTypeOverride   FlowType?
   pending            Boolean   @default(false)
   createdAt          DateTime  @default(now())
 
-  plaidItem PlaidItem @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
-  account   Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  plaidItem      PlaidItem       @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  budgetCategory BudgetCategory? @relation(fields: [budgetCategoryId], references: [id], onDelete: SetNull)
 
   @@index([plaidItemId])
   @@index([accountId])
+  @@index([budgetCategoryId])
   @@index([date])
   @@index([category])
   @@index([flowType])
@@ -122,6 +134,7 @@ model Transaction {
 enum BudgetCategoryType {
   EXPENSE
   INCOME
+  SAVINGS_TRANSFER
 }
 
 model BudgetCategory {
@@ -130,22 +143,29 @@ model BudgetCategory {
   name         String
   type         BudgetCategoryType
   monthlyLimit Float?
+  sortOrder    Int                @default(0)
   createdAt    DateTime           @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  rules        CategoryRule[]
 
   @@unique([userId, name, type])
   @@index([userId])
 }
 
-model MerchantBudget {
-  id           String   @id @default(cuid())
-  userId       String
-  merchantName String
-  monthlyLimit Float
-  createdAt    DateTime @default(now())
+// Merchant auto-categorization rule: exactly one of budgetCategoryId / ignore
+// (enforced in the API). merchantName is stored lowercase-normalized.
+model CategoryRule {
+  id               String   @id @default(cuid())
+  userId           String
+  merchantName     String
+  budgetCategoryId String?
+  ignore           Boolean  @default(false)
+  createdAt        DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetCategory BudgetCategory? @relation(fields: [budgetCategoryId], references: [id], onDelete: Cascade)
 
   @@unique([userId, merchantName])
   @@index([userId])

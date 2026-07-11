@@ -29,6 +29,17 @@ export function clampMonthYear(
   };
 }
 
+/**
+ * Parses a year query param, falling back to the current year for anything
+ * missing, non-numeric, or out of range (2000 through next year).
+ */
+export function clampYear(yearRaw: string | null, now: Date = new Date()): number {
+  const year = yearRaw === null ? NaN : parseInt(yearRaw, 10);
+  return Number.isInteger(year) && year >= 2000 && year <= now.getFullYear() + 1
+    ? year
+    : now.getFullYear();
+}
+
 export function validatePassword(password: string): { valid: boolean; error?: string } {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return { valid: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` };

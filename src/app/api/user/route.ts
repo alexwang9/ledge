@@ -72,7 +72,7 @@ export async function DELETE() {
   if ('error' in auth) return auth.error;
 
   try {
-    // Delete user (cascades to PlaidItems, Transactions, BudgetCategories, MerchantBudgets)
+    // Delete user (cascades to PlaidItems, Transactions, BudgetCategories, CategoryRules)
     await prisma.user.delete({
       where: { id: auth.userId },
     });

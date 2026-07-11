@@ -1,108 +1,85 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { roundCents } from '@/lib/money';
+import { clampYear } from '@/lib/validation';
+import { ensureUserCategories } from '@/lib/default-categories';
+import { normalizeActual, zeroMonths, MONTHS_PER_YEAR } from '@/lib/budget-math';
 
-export async function GET() {
+/**
+ * Budget dashboard aggregate for one calendar year. Actuals are computed at
+ * read time from transactions, so synced data is always current. Pending
+ * transactions are included (Plaid sync replaces pending rows with posted
+ * ones); ignored transactions are excluded from everything.
+ */
+export async function GET(request: NextRequest) {
   const auth = await requireAuth();
   if ('error' in auth) return auth.error;
 
-  const currentYear = new Date().getFullYear();
-  const startOfYear = new Date(currentYear, 0, 1);
-  const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
+  try {
+    const year = clampYear(request.nextUrl.searchParams.get('year'));
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
 
-  // Get all transactions for the current year
-  const plaidItems = await prisma.plaidItem.findMany({
-    where: { userId: auth.userId },
-    select: { id: true },
-  });
+    await ensureUserCategories(auth.userId);
 
-  const plaidItemIds = plaidItems.map((item) => item.id);
+    const [categories, transactions] = await Promise.all([
+      prisma.budgetCategory.findMany({
+        where: { userId: auth.userId },
+        orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, type: true, monthlyLimit: true, sortOrder: true },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          plaidItem: { userId: auth.userId },
+          date: { gte: startOfYear, lte: endOfYear },
+          ignored: false,
+        },
+        select: { budgetCategoryId: true, amount: true, date: true },
+      }),
+    ]);
 
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      plaidItemId: { in: plaidItemIds },
-      date: {
-        gte: startOfYear,
-        lte: endOfYear,
-      },
-    },
-    orderBy: { date: 'desc' },
-  });
+    const typeById = new Map(categories.map((c) => [c.id, c.type]));
 
-  // Get all budget categories
-  const budgetCategories = await prisma.budgetCategory.findMany({
-    where: { userId: auth.userId },
-    orderBy: [{ type: 'asc' }, { name: 'asc' }],
-  });
+    // Raw signed sums per category per month, then normalized per section so
+    // income reads positive (see budget-math.ts).
+    const rawSums: Record<string, number[]> = {};
+    const uncategorizedNet = zeroMonths();
+    const uncategorizedCountByMonth = new Array<number>(MONTHS_PER_YEAR).fill(0);
 
-  // If user has no categories, get the default ones
-  let categories = budgetCategories;
-  if (categories.length === 0) {
-    const defaultUser = await prisma.user.findUnique({
-      where: { email: 'system@default.local' },
-    });
-    if (defaultUser) {
-      categories = await prisma.budgetCategory.findMany({
-        where: { userId: defaultUser.id },
-        orderBy: [{ type: 'asc' }, { name: 'asc' }],
-      });
-    }
-  }
-
-  // Calculate monthly data
-  const monthlyData: Record<
-    number,
-    { income: number; expenses: number; byCategory: Record<string, number> }
-  > = {};
-
-  // Initialize all months
-  for (let month = 0; month < 12; month++) {
-    monthlyData[month] = { income: 0, expenses: 0, byCategory: {} };
-  }
-
-  // Process transactions. Transfers (credit-card payoffs, Venmo cashouts, etc.)
-  // are excluded from income/expense totals and from category breakdowns —
-  // they would otherwise double-count.
-  for (const txn of transactions) {
-    const effectiveFlow = txn.flowTypeOverride ?? txn.flowType;
-    if (effectiveFlow === 'TRANSFER') continue;
-
-    const month = new Date(txn.date).getMonth();
-    const category = txn.categoryOverride || txn.category || 'Other';
-
-    if (effectiveFlow === 'INCOME') {
-      monthlyData[month].income += Math.abs(txn.amount);
-    } else {
-      // EXPENSE: sign-preserving so refunds (negative amounts on credit cards)
-      // net out against purchases in the same category.
-      monthlyData[month].expenses += txn.amount;
-      if (!monthlyData[month].byCategory[category]) {
-        monthlyData[month].byCategory[category] = 0;
+    for (const txn of transactions) {
+      const month = new Date(txn.date).getMonth();
+      if (txn.budgetCategoryId === null || !typeById.has(txn.budgetCategoryId)) {
+        uncategorizedNet[month] += txn.amount;
+        uncategorizedCountByMonth[month] += 1;
+        continue;
       }
-      monthlyData[month].byCategory[category] += txn.amount;
+      if (!rawSums[txn.budgetCategoryId]) {
+        rawSums[txn.budgetCategoryId] = zeroMonths();
+      }
+      rawSums[txn.budgetCategoryId][month] += txn.amount;
     }
-  }
 
-  // Round accumulated float sums at the response boundary
-  for (const month of Object.keys(monthlyData)) {
-    const data = monthlyData[Number(month)];
-    data.income = roundCents(data.income);
-    data.expenses = roundCents(data.expenses);
-    for (const category of Object.keys(data.byCategory)) {
-      data.byCategory[category] = roundCents(data.byCategory[category]);
+    const actualsByCategory: Record<string, number[]> = {};
+    for (const [categoryId, sums] of Object.entries(rawSums)) {
+      const type = typeById.get(categoryId)!;
+      actualsByCategory[categoryId] = sums.map((sum) =>
+        roundCents(normalizeActual(type, sum))
+      );
     }
-  }
 
-  // The dashboard page consumes only monthlyData and categories; the old
-  // summary/transactions fields shipped a full year of transactions to the
-  // client for nothing.
-  return NextResponse.json({
-    monthlyData,
-    categories: categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      type: c.type,
-    })),
-  });
+    return NextResponse.json({
+      year,
+      categories,
+      actualsByCategory,
+      uncategorized: {
+        monthlyNet: uncategorizedNet.map(roundCents),
+        countByMonth: uncategorizedCountByMonth,
+        count: uncategorizedCountByMonth.reduce((sum, c) => sum + c, 0),
+      },
+    });
+  } catch (error) {
+    console.error('Failed to fetch dashboard data:', error);
+    return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 });
+  }
 }

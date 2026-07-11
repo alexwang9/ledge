@@ -23,6 +23,7 @@ export async function GET() {
     const transactions = await prisma.transaction.findMany({
       where: { plaidItemId: { in: plaidItemIds } },
       orderBy: { date: 'desc' },
+      include: { budgetCategory: { select: { name: true } } },
     });
 
     // Build CSV
@@ -35,6 +36,7 @@ export async function GET() {
       'Subcategory',
       'Institution',
       'Pending',
+      'Ignored',
     ];
 
     const rows = transactions.map((txn) => [
@@ -42,10 +44,11 @@ export async function GET() {
       escapeCsvField(txn.name),
       escapeCsvField(txn.merchantName || ''),
       txn.amount.toFixed(2),
-      escapeCsvField(txn.categoryOverride || txn.category || ''),
+      escapeCsvField(txn.budgetCategory?.name ?? txn.category ?? ''),
       escapeCsvField(txn.subcategory || ''),
       escapeCsvField(institutionMap[txn.plaidItemId] || ''),
       txn.pending ? 'Yes' : 'No',
+      txn.ignored ? 'Yes' : 'No',
     ]);
 
     const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');

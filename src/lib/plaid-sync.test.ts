@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { prismaMock, plaidClientMock } = vi.hoisted(() => ({
   prismaMock: {
     account: { upsert: vi.fn() },
-    transaction: { upsert: vi.fn(), deleteMany: vi.fn() },
+    transaction: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     plaidItem: { updateMany: vi.fn() },
+    categoryRule: { findMany: vi.fn() },
+    budgetCategory: { findMany: vi.fn() },
   },
   plaidClientMock: {
     accountsGet: vi.fn(),
@@ -24,7 +26,7 @@ import {
   RELINK_ERROR_CODES,
 } from '@/lib/plaid-sync';
 
-const ITEM = { id: 'item1', accessToken: 'plaintext-token', cursor: 'cursor-0' };
+const ITEM = { id: 'item1', userId: 'user1', accessToken: 'plaintext-token', cursor: 'cursor-0' };
 
 function plaidTxn(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -65,7 +67,11 @@ beforeEach(() => {
   prismaMock.account.upsert.mockResolvedValue({ id: 'acct-db-1', type: 'depository' });
   prismaMock.transaction.upsert.mockResolvedValue({});
   prismaMock.transaction.deleteMany.mockResolvedValue({ count: 1 });
+  prismaMock.transaction.findUnique.mockResolvedValue(null);
+  prismaMock.transaction.update.mockResolvedValue({});
   prismaMock.plaidItem.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.categoryRule.findMany.mockResolvedValue([]);
+  prismaMock.budgetCategory.findMany.mockResolvedValue([]);
 });
 
 describe('getPlaidErrorCode', () => {
@@ -158,6 +164,86 @@ describe('syncTransactionsForItem', () => {
     });
   });
 
+  it('resolves new transactions against the user rules and categories', async () => {
+    prismaMock.categoryRule.findMany.mockResolvedValue([
+      { merchantName: 'netflix', budgetCategoryId: 'cat-fun', ignore: false },
+    ]);
+    prismaMock.budgetCategory.findMany.mockResolvedValue([
+      { id: 'cat-everyday', name: 'Everyday', type: 'EXPENSE' },
+    ]);
+    plaidClientMock.transactionsSync.mockResolvedValueOnce(
+      syncPage({
+        added: [
+          plaidTxn('ruled', { merchant_name: 'Netflix' }),
+          plaidTxn('mapped'), // FOOD_AND_DRINK → "Everyday"
+        ],
+      })
+    );
+
+    await syncTransactionsForItem(ITEM);
+
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { plaidTransactionId: 'ruled' },
+        update: expect.objectContaining({
+          budgetCategoryId: 'cat-fun',
+          categorySource: 'RULE',
+          ignored: false,
+        }),
+      })
+    );
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { plaidTransactionId: 'mapped' },
+        update: expect.objectContaining({
+          budgetCategoryId: 'cat-everyday',
+          categorySource: 'AUTO',
+        }),
+      })
+    );
+  });
+
+  it('never clobbers a USER-assigned category on re-sync', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue({ categorySource: 'USER' });
+    plaidClientMock.transactionsSync.mockResolvedValueOnce(
+      syncPage({ modified: [plaidTxn('t1', { amount: 99.99 })] })
+    );
+
+    await syncTransactionsForItem(ITEM);
+
+    expect(prismaMock.transaction.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+      where: { plaidTransactionId: 't1' },
+      data: expect.objectContaining({ amount: 99.99 }),
+    });
+    const data = prismaMock.transaction.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('budgetCategoryId');
+    expect(data).not.toHaveProperty('ignored');
+    expect(data).not.toHaveProperty('categorySource');
+  });
+
+  it('re-resolves AUTO rows on re-sync (rules may have been added since)', async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue({ categorySource: 'AUTO' });
+    prismaMock.categoryRule.findMany.mockResolvedValue([
+      { merchantName: 'txn t1', budgetCategoryId: null, ignore: true },
+    ]);
+    plaidClientMock.transactionsSync.mockResolvedValueOnce(
+      syncPage({ modified: [plaidTxn('t1')] })
+    );
+
+    await syncTransactionsForItem(ITEM);
+
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          budgetCategoryId: null,
+          ignored: true,
+          categorySource: 'RULE',
+        }),
+      })
+    );
+  });
+
   it('deletes removed transactions via deleteMany', async () => {
     plaidClientMock.transactionsSync.mockResolvedValueOnce(
       syncPage({ removed: [{ transaction_id: 'gone' }] })
@@ -211,6 +297,7 @@ describe('markItemNeedsRelink', () => {
 describe('syncItemsWithIsolation', () => {
   const item = (id: string) => ({
     id,
+    userId: 'user1',
     accessToken: 'plaintext-token',
     cursor: 'cursor-0',
     institutionName: `Bank ${id}`,

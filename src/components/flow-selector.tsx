@@ -11,6 +11,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+// Flow type only controls transfer visibility on the transactions page and the
+// default categorization at sync time — budget totals are driven by each
+// transaction's category (and its type) plus the ignored flag.
 export type FlowType = 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
 interface FlowSelectorProps {

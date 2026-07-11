@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateEmail, validatePassword, clampMonthYear } from '@/lib/validation';
+import { validateEmail, validatePassword, clampMonthYear, clampYear } from '@/lib/validation';
 
 describe('validateEmail', () => {
   it('accepts a normal address', () => {
@@ -47,5 +47,21 @@ describe('clampMonthYear', () => {
     expect(clampMonthYear('12', '2026', now)).toEqual({ month: 6, year: 2026 });
     expect(clampMonthYear('5', '1999', now)).toEqual({ month: 5, year: 2026 });
     expect(clampMonthYear('5', '2028', now)).toEqual({ month: 5, year: 2026 });
+  });
+});
+
+describe('clampYear', () => {
+  const now = new Date(2026, 6, 15); // July 2026
+
+  it('parses a valid year', () => {
+    expect(clampYear('2025', now)).toBe(2025);
+    expect(clampYear('2027', now)).toBe(2027);
+  });
+
+  it('falls back to the current year when missing or invalid', () => {
+    expect(clampYear(null, now)).toBe(2026);
+    expect(clampYear('abc', now)).toBe(2026);
+    expect(clampYear('1999', now)).toBe(2026);
+    expect(clampYear('2028', now)).toBe(2026);
   });
 });
