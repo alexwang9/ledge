@@ -17,20 +17,32 @@ import { cn } from '@/lib/utils';
 export type SectionTint = 'emerald' | 'rose' | 'sky';
 
 // Static class strings so Tailwind can see them at build time.
-const TINTS: Record<SectionTint, { header: string; subtotal: string; text: string }> = {
+// `*Solid` variants are the opaque equivalents of the translucent tints
+// composited over the table's #0a0a0a base, used on sticky left cells so
+// horizontally-scrolled content never shows through them.
+const TINTS: Record<
+  SectionTint,
+  { header: string; headerSolid: string; subtotal: string; subtotalSolid: string; text: string }
+> = {
   emerald: {
     header: 'bg-emerald-500/[0.05]',
+    headerSolid: 'bg-[#0a1310]',
     subtotal: 'bg-emerald-500/[0.08]',
+    subtotalSolid: 'bg-[#0a1814]',
     text: 'text-emerald-400',
   },
   rose: {
     header: 'bg-rose-500/[0.05]',
+    headerSolid: 'bg-[#160d0e]',
     subtotal: 'bg-rose-500/[0.08]',
+    subtotalSolid: 'bg-[#1d0e11]',
     text: 'text-rose-400',
   },
   sky: {
     header: 'bg-sky-500/[0.05]',
+    headerSolid: 'bg-[#0a1215]',
     subtotal: 'bg-sky-500/[0.08]',
+    subtotalSolid: 'bg-[#0a161c]',
     text: 'text-sky-400',
   },
 };
@@ -166,13 +178,17 @@ export function BudgetSection({
 
   return (
     <>
-      {/* Section header */}
+      {/* Section header — label sticks to the left while scrolling horizontally */}
       <TableRow className={cn('border-white/[0.06]', tintClasses.header)}>
-        <TableCell
-          colSpan={columnCount(view)}
-          className={cn('font-medium uppercase text-xs tracking-wider', tintClasses.text)}
-        >
-          {title}
+        <TableCell colSpan={columnCount(view)} className={cn('p-0', tintClasses.text)}>
+          <div
+            className={cn(
+              'sticky left-0 inline-block px-4 py-2 font-medium uppercase text-xs tracking-wider',
+              tintClasses.headerSolid
+            )}
+          >
+            {title}
+          </div>
         </TableCell>
       </TableRow>
 
@@ -235,7 +251,9 @@ export function BudgetSection({
 
       {/* Subtotal row */}
       <TableRow className={cn('border-white/[0.06]', tintClasses.subtotal)}>
-        <TableCell className={cn('sticky left-0 font-medium', tintClasses.subtotal, tintClasses.text)}>
+        <TableCell
+          className={cn('sticky left-0 font-medium', tintClasses.subtotalSolid, tintClasses.text)}
+        >
           Total {title}
         </TableCell>
         {view === 'annual' ? (

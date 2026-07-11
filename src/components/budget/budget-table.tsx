@@ -113,7 +113,7 @@ export function BudgetTable({
 
           {/* Net Cash Flow = Income − Expenses − Savings */}
           <TableRow className="border-white/[0.06] bg-white/[0.04]">
-            <TableCell className="sticky left-0 bg-white/[0.05] font-semibold text-white">
+            <TableCell className="sticky left-0 bg-[#161616] font-semibold text-white">
               Net Cash Flow
             </TableCell>
             {view === 'annual' ? (
